@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ itinerary.destination }} Itinerary - Travel Planner{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Itinerary Header -->
+    <div class="card border-0 shadow-lg rounded-3 mb-4">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h1 class="h2 mb-3">{{ itinerary.destination }}</h1>
+                    <div class="d-flex flex-wrap gap-4 text-muted mb-3">
+                        <div>
+                            <i class="fas fa-calendar me-2"></i>
+                            {{ itinerary.start_date|date:"M d" }} - {{ itinerary.end_date|date:"M d, Y" }}
+                            <span class="text-primary ms-2">({{ itinerary.duration_days }} days)</span>
+                        </div>
+                        <div>
+                            <i class="fas fa-users me-2"></i>
+                            {{ itinerary.number_of_people }} {% if itinerary.number_of_people == 1 %}person{% else %}people{% endif %}
+                        </div>
+                        <div>
+                            <i class="fas fa-dollar-sign me-2"></i>
+                            Budget: ${{ itinerary.budget }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        {% for interest in itinerary.interests %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary me-2 mb-2">{{ interest }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
+                    <a href="{% url 'home' %}" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Plans
+                    </a>
+                    <button class="btn btn-primary" onclick="window.print()">
+                        <i class="fas fa-print me-2"></i>Print
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generated Itinerary -->
+    <div class="card border-0 shadow-lg rounded-3">
+        <div class="card-body p-4">
+            <div class="generated-itinerary">
+                {{ itinerary.generated_plan|linebreaks }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .generated-itinerary {
+        font-size: 1.1rem;
+        line-height: 1.6;
+    }
+    
+    .generated-itinerary h1,
+    .generated-itinerary h2,
+    .generated-itinerary h3,
+    .generated-itinerary h4 {
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        font-weight: 600;
+    }
+    
+    .generated-itinerary ul,
+    .generated-itinerary ol {
+        margin-bottom: 1.5rem;
+    }
+    
+    .generated-itinerary li {
+        margin-bottom: 0.5rem;
+    }
+    
+    @media print {
+        header, footer, .btn {
+            display: none !important;
+        }
+        
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
+        .container {
+            max-width: 100% !important;
+            padding: 0 !important;
+        }
+    }
+</style>
+{% endblock %} 

@@ -3,33 +3,65 @@
 {% block title %}Home - Travel Planner{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="card shadow mb-4">
-            <div class="card-header bg-primary text-white">
-                <h2 class="card-title h4 mb-0">Welcome, {{ user.username }}!</h2>
-            </div>
-            <div class="card-body">
-                <p>You are now logged in to your Travel Planner account.</p>
-                <p>Here you can plan your travel itineraries, save your favorite destinations, and keep track of your travel plans.</p>
-            </div>
-        </div>
-        
-        <div class="card shadow">
-            <div class="card-header">
-                <h3 class="card-title h5 mb-0">Your Travel Dashboard</h3>
-            </div>
-            <div class="card-body">
-                <p>This is where your travel plans will appear once you start creating them.</p>
-                <div class="alert alert-info">
-                    <p class="mb-0">Coming soon: Create and manage your travel itineraries!</p>
-                </div>
-                
-                <div class="text-center mt-4">
-                    <a href="#" class="btn btn-primary">Create New Travel Plan</a>
-                </div>
-            </div>
-        </div>
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h3 mb-0">Your Travel Plans</h2>
+        <a href="{% url 'create_itinerary' %}" class="btn btn-primary btn-lg shadow-sm hover-lift transition">
+            <i class="fas fa-plus me-2"></i>Create New Itinerary
+        </a>
     </div>
+
+    {% if itineraries %}
+        <div class="row g-4">
+            {% for itinerary in itineraries %}
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-0 shadow-sm hover-lift transition">
+                        <div class="card-body">
+                            <h3 class="h5 card-title text-primary mb-3">{{ itinerary.destination }}</h3>
+                            <div class="mb-3">
+                                <small class="text-muted d-block">{{ itinerary.start_date|date:"M d, Y" }} - {{ itinerary.end_date|date:"M d, Y" }}</small>
+                                <small class="text-muted d-block">{{ itinerary.duration_days }} days • ${{ itinerary.budget }}</small>
+                            </div>
+                            <div class="mb-3">
+                                {% for interest in itinerary.interests %}
+                                    <span class="badge bg-light text-dark me-1 mb-1">{{ interest }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent border-0 pt-0">
+                            <a href="{% url 'view_itinerary' pk=itinerary.pk %}" class="btn btn-outline-primary w-100">
+                                View Itinerary
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <img src="https://cdn.lordicon.com/gqzfzudq.json" width="120" height="120" alt="No itineraries">
+            </div>
+            <h3 class="h4 mb-3">No Travel Plans Yet</h3>
+            <p class="text-muted mb-4">Start planning your next adventure by creating a new itinerary!</p>
+            <a href="{% url 'create_itinerary' %}" class="btn btn-primary btn-lg shadow-sm hover-lift transition">
+                Create Your First Itinerary
+            </a>
+        </div>
+    {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hover-lift {
+        transition: transform 0.15s ease;
+    }
+    .hover-lift:hover {
+        transform: translateY(-2px);
+    }
+    .transition {
+        transition: all 0.15s ease;
+    }
+</style>
 {% endblock %} 
