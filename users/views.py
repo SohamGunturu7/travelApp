@@ -69,103 +69,108 @@ def create_itinerary(request):
             
             # Generate itinerary using Gemini
             try:
-                # List available models first (for debugging)
-                list_available_models()
-                
-                # Configure the model
+                # Configure the model with maximum possible tokens
                 generation_config = {
                     "temperature": 0.9,
                     "top_p": 1,
                     "top_k": 1,
-                    "max_output_tokens": 100000,
+                    "max_output_tokens": 30000,  # Maximum allowed tokens
                 }
 
-                safety_settings = [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                ]
-
-                # Create the model with the correct name
+                # Create the model
                 model = genai.GenerativeModel(
                     model_name="models/gemini-1.5-pro",
                     generation_config=generation_config
                 )
 
-                prompt = f"""Create a detailed daily travel itinerary for a {itinerary.duration_days}-day trip to {itinerary.destination}.
+                # For longer trips, break into chunks of 5 days each
+                total_days = itinerary.duration_days
+                chunk_size = 5
+                num_chunks = (total_days + chunk_size - 1) // chunk_size
+                full_itinerary = []
 
-IMPORTANT: You MUST provide a complete schedule for ALL {itinerary.duration_days} days. Do not summarize, skip, or combine days. Each day must be individually detailed regardless of similarities.
+                for chunk in range(num_chunks):
+                    start_day = chunk * chunk_size + 1
+                    end_day = min((chunk + 1) * chunk_size, total_days)
+                    
+                    chunk_prompt = f"""Create a detailed daily travel itinerary for days {start_day} to {end_day} of a {total_days}-day trip to {itinerary.destination}.
+
+CRITICAL REQUIREMENT: You MUST generate EXACTLY {end_day - start_day + 1} days of detailed itinerary, from Day {start_day} to Day {end_day}. Any summarizing or skipping of days will make the response unusable.
 
 Trip Details:
-- Duration: {itinerary.duration_days} days (requiring {itinerary.duration_days} individual day schedules)
+- Total Trip Duration: {total_days} days
+- Current Section: Days {start_day} to {end_day}
 - Dates: {itinerary.start_date} to {itinerary.end_date}
-- Budget: ${itinerary.budget} (${itinerary.budget / itinerary.duration_days:.2f} per day)
+- Daily Budget: ${itinerary.budget / total_days:.2f}
 - Number of people: {itinerary.number_of_people}
 - Interests: {', '.join(itinerary.interests)}
 - Preferred pace: {itinerary.preferred_pace}
 
-Strict Formatting Requirements:
-1. You MUST provide a detailed schedule for EACH of the {itinerary.duration_days} days
-2. Do NOT use phrases like "similar to day X" or "repeat previous activities"
-3. Each day must have its own unique activities and schedule
-4. Every single day must follow the exact same formatting
-5. Each activity must have its own line with exact timestamp
-6. Never skip or summarize days, even for longer trips
-7. If activities are repeated, still list them in full detail each time
+ABSOLUTELY REQUIRED:
+1. Generate EXACTLY {end_day - start_day + 1} individual day schedules
+2. Each day MUST be fully detailed from morning to night
+3. NO SUMMARIZING or phrases like "similar to previous days"
+4. NO SKIPPING any days or activities
+5. If you run out of unique activities, create variations or revisit popular spots at different times
+6. The response MUST contain "Day {start_day}" through "Day {end_day}" with no gaps
 
-Format each day exactly as follows:
+Format each day EXACTLY as follows:
 
 Day [X] - [Full Date]
 07:00 - [Activity] - [Cost] - [Details]
-08:00 - [Activity] - [Cost] - [Details]
-(Continue with activities throughout the day)
-22:00 - Return to Hotel - [Cost] - [Transportation Details]
+08:30 - [Next Activity] - [Cost] - [Details]
+(Continue with FULL day schedule)
+22:00 - Return to Hotel - [Cost] - [Transport Details]
 
-Required Elements for Each Day:
-- Morning activities (starting 07:00-08:00)
-- Mid-morning break (around 10:30)
+Required for EACH day:
+- Breakfast (07:00-08:30)
+- Morning activity
+- Mid-morning break
 - Lunch (12:00-13:30)
 - Afternoon activities
-- Evening activities
+- Evening activity
 - Dinner (18:00-20:00)
-- Return to hotel time
-- ALL transit times between locations
-- ALL costs for each activity
+- Return to hotel
+- ALL transit times
+- ALL costs
 
-Example Format:
-Day 1 - Monday, March 15
-07:00 - Breakfast at Sunrise Cafe - $15 - Local breakfast specialties
-08:30 - Transit to Museum - $3 - Bus Line 100, 20-minute ride
-09:00 - City Museum Tour - $25 - Guided tour available
-10:30 - Coffee Break at Art Cafe - $5 - Famous local pastries
-11:00 - Walk to Historical District - $0 - 15-minute walk
-12:30 - Lunch at Heritage Restaurant - $30 - Traditional cuisine
-14:00 - Afternoon Activities...
-(Continue with full day schedule)
-22:00 - Return to Hotel - $10 - Evening taxi fare
+Example of REQUIRED format:
+Day {start_day} - [Date]
+07:00 - Breakfast at Morning Cafe - $15 - Local specialties
+08:30 - Transit to Location - $3 - Bus details
+09:00 - Activity - $25 - Full details
+(... complete day schedule ...)
+22:00 - Return to Hotel - $10 - Transport details
 
-Remember:
-- EVERY day must be fully detailed
-- NO summarizing or skipping days
-- NO referring to other days
-- FULL details for each activity
-- EXACT timestamps for everything
-- ALL costs must be listed
-- ALL transportation details included
+CRITICAL: Your response must contain EXACTLY {end_day - start_day + 1} days of detailed schedules."""
 
-Daily Budget Reminder: ${itinerary.budget / itinerary.duration_days:.2f} per day
+                    response = model.generate_content(chunk_prompt)
+                    if response.text:
+                        full_itinerary.append(response.text)
+                    else:
+                        raise Exception(f"No response generated for days {start_day}-{end_day}")
 
-Generate a complete, detailed schedule for ALL {itinerary.duration_days} days following these exact requirements."""
-
-                response = model.generate_content(prompt)
+                # Combine all chunks into final itinerary
+                complete_itinerary = "\n\n".join(full_itinerary)
                 
-                if response.text:
-                    itinerary.generated_plan = response.text
-                    itinerary.save()
-                    return redirect('view_itinerary', pk=itinerary.pk)
-                else:
-                    raise Exception("No response generated from the AI model")
+                # Verify all days are present
+                expected_days = set(range(1, total_days + 1))
+                found_days = set()
+                for line in complete_itinerary.split('\n'):
+                    if line.startswith('Day '):
+                        try:
+                            day_num = int(line.split(' ')[1])
+                            found_days.add(day_num)
+                        except:
+                            continue
+                
+                missing_days = expected_days - found_days
+                if missing_days:
+                    raise Exception(f"Missing days in generated itinerary: {missing_days}")
+
+                itinerary.generated_plan = complete_itinerary
+                itinerary.save()
+                return redirect('view_itinerary', pk=itinerary.pk)
             
             except Exception as e:
                 messages.error(request, f'Error generating itinerary: {str(e)}')
