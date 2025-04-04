@@ -93,23 +93,70 @@ def create_itinerary(request):
                     generation_config=generation_config
                 )
 
-                prompt = f"""Create a detailed daily travel itinerary for a trip to {itinerary.destination}.
-                Trip Details:
-                - Duration: {itinerary.duration_days} days
-                - Dates: {itinerary.start_date} to {itinerary.end_date}
-                - Budget: ${itinerary.budget}
-                - Number of people: {itinerary.number_of_people}
-                - Interests: {', '.join(itinerary.interests)}
-                - Preferred pace: {itinerary.preferred_pace}
+                prompt = f"""Create a detailed daily travel itinerary for a {itinerary.duration_days}-day trip to {itinerary.destination}.
 
-                Please provide a day-by-day itinerary including:
-                - Morning, afternoon, and evening activities
-                - Recommended restaurants and cuisine
-                - Estimated costs for activities and meals
-                - Travel tips and local customs
-                - Must-see attractions based on the specified interests
-                
-                Format the response in a clear, organized manner with daily schedules."""
+IMPORTANT: You MUST provide a complete schedule for ALL {itinerary.duration_days} days. Do not summarize, skip, or combine days. Each day must be individually detailed regardless of similarities.
+
+Trip Details:
+- Duration: {itinerary.duration_days} days (requiring {itinerary.duration_days} individual day schedules)
+- Dates: {itinerary.start_date} to {itinerary.end_date}
+- Budget: ${itinerary.budget} (${itinerary.budget / itinerary.duration_days:.2f} per day)
+- Number of people: {itinerary.number_of_people}
+- Interests: {', '.join(itinerary.interests)}
+- Preferred pace: {itinerary.preferred_pace}
+
+Strict Formatting Requirements:
+1. You MUST provide a detailed schedule for EACH of the {itinerary.duration_days} days
+2. Do NOT use phrases like "similar to day X" or "repeat previous activities"
+3. Each day must have its own unique activities and schedule
+4. Every single day must follow the exact same formatting
+5. Each activity must have its own line with exact timestamp
+6. Never skip or summarize days, even for longer trips
+7. If activities are repeated, still list them in full detail each time
+
+Format each day exactly as follows:
+
+Day [X] - [Full Date]
+07:00 - [Activity] - [Cost] - [Details]
+08:00 - [Activity] - [Cost] - [Details]
+(Continue with activities throughout the day)
+22:00 - Return to Hotel - [Cost] - [Transportation Details]
+
+Required Elements for Each Day:
+- Morning activities (starting 07:00-08:00)
+- Mid-morning break (around 10:30)
+- Lunch (12:00-13:30)
+- Afternoon activities
+- Evening activities
+- Dinner (18:00-20:00)
+- Return to hotel time
+- ALL transit times between locations
+- ALL costs for each activity
+
+Example Format:
+Day 1 - Monday, March 15
+07:00 - Breakfast at Sunrise Cafe - $15 - Local breakfast specialties
+08:30 - Transit to Museum - $3 - Bus Line 100, 20-minute ride
+09:00 - City Museum Tour - $25 - Guided tour available
+10:30 - Coffee Break at Art Cafe - $5 - Famous local pastries
+11:00 - Walk to Historical District - $0 - 15-minute walk
+12:30 - Lunch at Heritage Restaurant - $30 - Traditional cuisine
+14:00 - Afternoon Activities...
+(Continue with full day schedule)
+22:00 - Return to Hotel - $10 - Evening taxi fare
+
+Remember:
+- EVERY day must be fully detailed
+- NO summarizing or skipping days
+- NO referring to other days
+- FULL details for each activity
+- EXACT timestamps for everything
+- ALL costs must be listed
+- ALL transportation details included
+
+Daily Budget Reminder: ${itinerary.budget / itinerary.duration_days:.2f} per day
+
+Generate a complete, detailed schedule for ALL {itinerary.duration_days} days following these exact requirements."""
 
                 response = model.generate_content(prompt)
                 
