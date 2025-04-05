@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
 from django.utils import timezone
+import re
 
 class Itinerary(models.Model):
     INTEREST_CHOICES = [
@@ -45,3 +46,68 @@ class Itinerary(models.Model):
     @property
     def is_future_trip(self):
         return self.start_date > timezone.now().date()
+        
+    @property
+    def days_itinerary(self):
+        """Parse the generated plan into a structured day-by-day format"""
+        if not self.generated_plan:
+            return []
+            
+        days = []
+        current_day = None
+        current_activities = []
+        
+        for line in self.generated_plan.split('\n'):
+            # Check for a new day header
+            day_match = re.match(r'^Day\s+(\d+)\s*-?\s*(.*?)$', line.strip())
+            
+            if day_match:
+                # Save the previous day if it exists
+                if current_day is not None and current_activities:
+                    days.append({
+                        'day_number': current_day['day_number'],
+                        'day_title': current_day['day_title'],
+                        'activities': current_activities
+                    })
+                
+                # Start a new day
+                day_number = day_match.group(1)
+                day_title = day_match.group(2).strip()
+                current_day = {
+                    'day_number': day_number,
+                    'day_title': day_title
+                }
+                current_activities = []
+            elif current_day is not None:
+                # Check for activity lines (usually start with a time)
+                time_match = re.match(r'^(\d{1,2}:\d{2})\s*-\s*(.*?)(?:\s*-\s*(.*))?$', line.strip())
+                
+                if time_match:
+                    time = time_match.group(1)
+                    activity = time_match.group(2).strip()
+                    details = time_match.group(3).strip() if time_match.group(3) else ""
+                    
+                    # Check if details contain cost and description
+                    cost_details = details.split(' - ', 1) if ' - ' in details else [details, ""]
+                    cost = cost_details[0] if len(cost_details) > 0 else ""
+                    description = cost_details[1] if len(cost_details) > 1 else ""
+                    
+                    current_activities.append({
+                        'time': time,
+                        'activity': activity,
+                        'cost': cost,
+                        'description': description
+                    })
+                elif line.strip() and current_activities:
+                    # Append to the previous activity's description if it's a continuation
+                    current_activities[-1]['description'] += " " + line.strip()
+        
+        # Add the last day
+        if current_day is not None and current_activities:
+            days.append({
+                'day_number': current_day['day_number'],
+                'day_title': current_day['day_title'],
+                'activities': current_activities
+            })
+            
+        return days
