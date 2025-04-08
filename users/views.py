@@ -1,11 +1,14 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from .forms import UserRegisterForm, ItineraryForm
-from .models import Itinerary
+from .models import Itinerary, Activity
 import google.generativeai as genai
 import json
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.db import models
 
 # Configure Gemini API
 genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
@@ -183,5 +186,221 @@ CRITICAL: Your response must contain EXACTLY {end_day - start_day + 1} days of d
 
 @login_required
 def view_itinerary(request, pk):
-    itinerary = Itinerary.objects.get(pk=pk, user=request.user)
-    return render(request, 'users/view_itinerary.html', {'itinerary': itinerary})
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+    
+    # Get all activities for this itinerary
+    activities = Activity.objects.filter(itinerary=itinerary).order_by('day_number', 'order')
+    
+    # Group activities by day
+    days = {}
+    for activity in activities:
+        if activity.day_number not in days:
+            days[activity.day_number] = {
+                'day_number': activity.day_number,
+                'activities': []
+            }
+        days[activity.day_number]['activities'].append(activity)
+    
+    # Convert to sorted list for template
+    days_list = [days[day_num] for day_num in sorted(days.keys())]
+    
+    # If no activities exist yet and we have a generated plan, create initial activities
+    if not activities.exists() and itinerary.generated_plan:
+        generated_days = itinerary.days_itinerary
+        for day in generated_days:
+            day_number = int(day['day_number'])
+            for order, activity_data in enumerate(day['activities'], 1):
+                Activity.objects.create(
+                    itinerary=itinerary,
+                    day_number=day_number,
+                    time=activity_data['time'],
+                    activity=activity_data['activity'],
+                    description=activity_data.get('description', ''),
+                    cost=activity_data.get('cost', ''),
+                    order=order
+                )
+        # Refresh the activities after creating them
+        return redirect('view_itinerary', pk=pk)
+    
+    return render(request, 'users/view_itinerary.html', {
+        'itinerary': itinerary,
+        'days': days_list
+    })
+
+@login_required
+@require_http_methods(["POST"])
+def add_activity(request, pk):
+    try:
+        itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        if not all(key in data for key in ['day_number', 'time', 'activity']):
+            return JsonResponse({'error': 'Missing required fields'}, status=400)
+        
+        # Get the maximum order for the day
+        max_order = Activity.objects.filter(
+            itinerary=itinerary,
+            day_number=data['day_number']
+        ).aggregate(models.Max('order'))['order__max'] or 0
+        
+        activity = Activity.objects.create(
+            itinerary=itinerary,
+            day_number=data['day_number'],
+            time=data['time'],
+            activity=data['activity'],
+            description=data.get('description', ''),
+            cost=data.get('cost', ''),
+            order=max_order + 1
+        )
+        
+        return JsonResponse({
+            'id': activity.id,
+            'time': activity.time,
+            'activity': activity.activity,
+            'description': activity.description,
+            'cost': activity.cost
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_http_methods(["POST"])
+def edit_activity(request, pk, activity_id):
+    try:
+        activity = get_object_or_404(Activity, id=activity_id, itinerary__pk=pk, itinerary__user=request.user)
+        data = json.loads(request.body)
+        
+        # Update the activity fields
+        activity.time = data['time']
+        activity.activity = data['activity']
+        activity.description = data.get('description', '')
+        activity.cost = data.get('cost', '')
+        activity.save()
+        
+        return JsonResponse({
+            'id': activity.id,
+            'time': activity.time,
+            'activity': activity.activity,
+            'description': activity.description,
+            'cost': activity.cost
+        })
+    except Activity.DoesNotExist:
+        return JsonResponse({'error': 'Activity not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_activity(request, pk, activity_id):
+    try:
+        activity = get_object_or_404(Activity, id=activity_id, itinerary__pk=pk, itinerary__user=request.user)
+        activity.delete()
+        return JsonResponse({'status': 'success'})
+    except Activity.DoesNotExist:
+        return JsonResponse({'error': 'Activity not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+def get_recommendations(request, pk):
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+    
+    try:
+        # Configure the model
+        generation_config = {
+            "temperature": 0.9,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 2048,
+        }
+
+        # Configure Gemini API
+        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+
+        model = genai.GenerativeModel(
+            model_name="models/gemini-1.5-pro",
+            generation_config=generation_config
+        )
+
+        # Create prompt for recommendations
+        prompt = f"""You are a travel expert. Given the following travel details, recommend real and accurate restaurants and hotels that fit within the budget. Make sure to keep the recommendations realistic and within the specified budget constraints.
+
+Destination: {itinerary.destination}
+Total Budget: ${itinerary.budget} for {itinerary.duration_days} days
+Daily Budget: ${float(itinerary.budget) / itinerary.duration_days:.2f}
+Number of People: {itinerary.number_of_people}
+Duration: {itinerary.duration_days} days
+Interests: {', '.join(itinerary.interests)}
+
+Please provide recommendations in the following JSON format exactly:
+{{
+    "restaurants": [
+        {{
+            "name": "string",
+            "cuisine": "string",
+            "price_range": "string (in $ format)",
+            "description": "string",
+            "match_reason": "string"
+        }}
+    ],
+    "hotels": [
+        {{
+            "name": "string",
+            "price_per_night": "string (in $ format)",
+            "location": "string",
+            "amenities": ["string"],
+            "match_reason": "string"
+        }}
+    ]
+}}
+
+Important:
+- Provide 5 restaurant recommendations
+- Provide 3 hotel recommendations
+- Ensure prices are realistic and within budget
+- Focus on options that match the user's interests
+- Only return valid JSON format
+"""
+
+        # Generate recommendations
+        response = model.generate_content(prompt)
+        
+        if not response.text:
+            raise ValueError("No response received from the AI model")
+
+        try:
+            # Try to parse the response as JSON
+            recommendations = json.loads(response.text)
+            
+            # Validate the structure
+            if not isinstance(recommendations, dict):
+                raise ValueError("Response is not a dictionary")
+            if "restaurants" not in recommendations or "hotels" not in recommendations:
+                raise ValueError("Missing required sections in response")
+            if not isinstance(recommendations["restaurants"], list) or not isinstance(recommendations["hotels"], list):
+                raise ValueError("Restaurants or hotels are not in list format")
+            
+            return JsonResponse(recommendations)
+            
+        except json.JSONDecodeError as e:
+            # If JSON parsing fails, try to extract JSON from the response
+            # Sometimes the AI might include additional text before or after the JSON
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response.text)
+            if json_match:
+                try:
+                    recommendations = json.loads(json_match.group(0))
+                    return JsonResponse(recommendations)
+                except json.JSONDecodeError:
+                    raise ValueError(f"Could not parse JSON from response: {response.text[:200]}")
+            else:
+                raise ValueError(f"Invalid JSON format in response: {response.text[:200]}")
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error generating recommendations: {str(e)}\n{error_details}")
+        return JsonResponse({
+            'error': f'Error generating recommendations: {str(e)}'
+        }, status=500)

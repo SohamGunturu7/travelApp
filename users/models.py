@@ -111,3 +111,19 @@ class Itinerary(models.Model):
             })
             
         return days
+
+class Activity(models.Model):
+    itinerary = models.ForeignKey(Itinerary, on_delete=models.CASCADE, related_name='activities')
+    day_number = models.PositiveIntegerField()
+    time = models.CharField(max_length=10)
+    activity = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    cost = models.CharField(max_length=50, blank=True)
+    order = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ['day_number', 'order', 'time']
+        verbose_name_plural = 'Activities'
+
+    def __str__(self):
+        return f"Day {self.day_number} - {self.time} - {self.activity}"
