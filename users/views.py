@@ -116,14 +116,15 @@ ABSOLUTELY REQUIRED:
 4. NO SKIPPING any days or activities
 5. If you run out of unique activities, create variations or revisit popular spots at different times
 6. The response MUST contain "Day {start_day}" through "Day {end_day}" with no gaps
+7. DO NOT include dollar signs ($) in any cost values - write numbers only
 
 Format each day EXACTLY as follows:
 
 Day [X] - [Full Date]
-07:00 - [Activity] - [Cost] - [Details]
-08:30 - [Next Activity] - [Cost] - [Details]
+07:00 - [Activity] - [Cost without $ sign] - [Details]
+08:30 - [Next Activity] - [Cost without $ sign] - [Details]
 (Continue with FULL day schedule)
-22:00 - Return to Hotel - [Cost] - [Transport Details]
+22:00 - Return to Hotel - [Cost without $ sign] - [Transport Details]
 
 Required for EACH day:
 - Breakfast (07:00-08:30)
@@ -135,15 +136,15 @@ Required for EACH day:
 - Dinner (18:00-20:00)
 - Return to hotel
 - ALL transit times
-- ALL costs
+- ALL costs (numbers only, NO dollar signs)
 
 Example of REQUIRED format:
 Day {start_day} - [Date]
-07:00 - Breakfast at Morning Cafe - $15 - Local specialties
-08:30 - Transit to Location - $3 - Bus details
-09:00 - Activity - $25 - Full details
+07:00 - Breakfast at Morning Cafe - 15 - Local specialties
+08:30 - Transit to Location - 3 - Bus details
+09:00 - Activity - 25 - Full details
 (... complete day schedule ...)
-22:00 - Return to Hotel - $10 - Transport details
+22:00 - Return to Hotel - 10 - Transport details
 
 CRITICAL: Your response must contain EXACTLY {end_day - start_day + 1} days of detailed schedules."""
 
@@ -189,7 +190,7 @@ def view_itinerary(request, pk):
     itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
     
     # Get all activities for this itinerary
-    activities = Activity.objects.filter(itinerary=itinerary).order_by('day_number', 'order')
+    activities = Activity.objects.filter(itinerary=itinerary).order_by('day_number', 'time')
     
     # Group activities by day
     days = {}
@@ -238,11 +239,37 @@ def add_activity(request, pk):
         if not all(key in data for key in ['day_number', 'time', 'activity']):
             return JsonResponse({'error': 'Missing required fields'}, status=400)
         
-        # Get the maximum order for the day
-        max_order = Activity.objects.filter(
+        # Convert input time to a comparable format (for ordering)
+        input_time = data['time']
+        
+        # Get all activities for the day and determine the correct order
+        day_activities = Activity.objects.filter(
             itinerary=itinerary,
             day_number=data['day_number']
-        ).aggregate(models.Max('order'))['order__max'] or 0
+        ).order_by('time')
+        
+        # Determine the correct order based on time
+        order = 1
+        if day_activities.exists():
+            # Insert at the right position based on time comparison
+            inserted = False
+            for i, existing_activity in enumerate(day_activities):
+                if input_time < existing_activity.time:
+                    # Insert before this activity
+                    order = i + 1
+                    inserted = True
+                    break
+            
+            if not inserted:
+                # New activity has the latest time, append at the end
+                order = day_activities.count() + 1
+                
+            # Update the order of all activities that come after
+            Activity.objects.filter(
+                itinerary=itinerary,
+                day_number=data['day_number'],
+                order__gte=order
+            ).update(order=models.F('order') + 1)
         
         activity = Activity.objects.create(
             itinerary=itinerary,
@@ -251,7 +278,7 @@ def add_activity(request, pk):
             activity=data['activity'],
             description=data.get('description', ''),
             cost=data.get('cost', ''),
-            order=max_order + 1
+            order=order
         )
         
         return JsonResponse({
@@ -271,8 +298,50 @@ def edit_activity(request, pk, activity_id):
         activity = get_object_or_404(Activity, id=activity_id, itinerary__pk=pk, itinerary__user=request.user)
         data = json.loads(request.body)
         
+        # Check if time has changed
+        old_time = activity.time
+        new_time = data['time']
+        
+        if old_time != new_time:
+            # Time has changed, we need to reorder activities
+            
+            # First, remove this activity from the order
+            Activity.objects.filter(
+                itinerary=activity.itinerary,
+                day_number=activity.day_number,
+                order__gt=activity.order
+            ).update(order=models.F('order') - 1)
+            
+            # Find the new position
+            day_activities = Activity.objects.filter(
+                itinerary=activity.itinerary,
+                day_number=activity.day_number
+            ).exclude(id=activity.id).order_by('time')
+            
+            new_order = 1
+            if day_activities.exists():
+                inserted = False
+                for i, existing_activity in enumerate(day_activities):
+                    if new_time < existing_activity.time:
+                        new_order = i + 1
+                        inserted = True
+                        break
+                
+                if not inserted:
+                    # Activity has the latest time, append at the end
+                    new_order = day_activities.count() + 1
+                
+                # Update the order of all activities that come after
+                Activity.objects.filter(
+                    itinerary=activity.itinerary,
+                    day_number=activity.day_number,
+                    order__gte=new_order
+                ).update(order=models.F('order') + 1)
+            
+            activity.order = new_order
+        
         # Update the activity fields
-        activity.time = data['time']
+        activity.time = new_time
         activity.activity = data['activity']
         activity.description = data.get('description', '')
         activity.cost = data.get('cost', '')
