@@ -43,6 +43,56 @@
         </div>
     </div>
 
+    <!-- Add this after the itinerary header card -->
+    <div class="card border-0 shadow-lg rounded-3 mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="h4 mb-0">
+                    <i class="fas fa-concierge-bell me-2 text-primary"></i>
+                    Recommendations
+                </h2>
+                <button class="btn btn-primary" id="loadRecommendations">
+                    <i class="fas fa-sync me-2"></i>Get Recommendations
+                </button>
+            </div>
+            
+            <!-- Recommendations content -->
+            <div id="recommendationsContent" class="mt-4" style="display: none;">
+                <div class="row g-4">
+                    <!-- Restaurants Section -->
+                    <div class="col-lg-6">
+                        <h3 class="h5 mb-3">
+                            <i class="fas fa-utensils me-2"></i>
+                            Recommended Restaurants
+                        </h3>
+                        <div id="restaurantsList" class="recommendations-list">
+                            <!-- Restaurants will be populated here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Hotels Section -->
+                    <div class="col-lg-6">
+                        <h3 class="h5 mb-3">
+                            <i class="fas fa-hotel me-2"></i>
+                            Recommended Hotels
+                        </h3>
+                        <div id="hotelsList" class="recommendations-list">
+                            <!-- Hotels will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Loading spinner -->
+            <div id="recommendationsLoading" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted">Generating personalized recommendations...</p>
+            </div>
+        </div>
+    </div>
+
     <!-- Day Navigation -->
     <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -301,6 +351,46 @@
             padding: 0 !important;
         }
     }
+    
+    .recommendation-card {
+        background: #fff;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+        transition: transform 0.2s;
+    }
+    
+    .recommendation-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .price-badge {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .amenities-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    
+    .amenity-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        background-color: #e9ecef;
+        border-radius: 1rem;
+    }
+    
+    .match-reason {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #e9ecef;
+    }
 </style>
 {% endblock %}
 
@@ -499,6 +589,82 @@
                     }
                 }
             });
+        });
+
+        const loadBtn = document.getElementById('loadRecommendations');
+        const content = document.getElementById('recommendationsContent');
+        const loading = document.getElementById('recommendationsLoading');
+        const restaurantsList = document.getElementById('restaurantsList');
+        const hotelsList = document.getElementById('hotelsList');
+        
+        loadBtn.addEventListener('click', async function() {
+            try {
+                // Show loading state
+                content.style.display = 'none';
+                loading.style.display = 'block';
+                loadBtn.disabled = true;
+                
+                // Fetch recommendations
+                const response = await fetch(`/itinerary/{{ itinerary.id }}/recommendations/`, {
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load recommendations');
+                
+                const data = await response.json();
+                
+                // Populate restaurants
+                restaurantsList.innerHTML = data.restaurants.map(restaurant => `
+                    <div class="recommendation-card">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h4 class="h6 mb-0">${restaurant.name}</h4>
+                            <span class="badge bg-success bg-opacity-10 text-success price-badge">
+                                ${restaurant.price_range}
+                            </span>
+                        </div>
+                        <div class="text-muted small mb-2">${restaurant.cuisine}</div>
+                        <p class="small mb-2">${restaurant.description}</p>
+                        <div class="match-reason">
+                            <i class="fas fa-check-circle text-success me-1"></i>
+                            ${restaurant.match_reason}
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Populate hotels
+                hotelsList.innerHTML = data.hotels.map(hotel => `
+                    <div class="recommendation-card">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h4 class="h6 mb-0">${hotel.name}</h4>
+                            <span class="badge bg-primary bg-opacity-10 text-primary price-badge">
+                                ${hotel.price_per_night}/night
+                            </span>
+                        </div>
+                        <div class="text-muted small mb-2">${hotel.location}</div>
+                        <div class="amenities-list">
+                            ${hotel.amenities.map(amenity => 
+                                `<span class="amenity-badge">${amenity}</span>`
+                            ).join('')}
+                        </div>
+                        <div class="match-reason">
+                            <i class="fas fa-check-circle text-success me-1"></i>
+                            ${hotel.match_reason}
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Show content
+                loading.style.display = 'none';
+                content.style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error loading recommendations. Please try again.');
+            } finally {
+                loadBtn.disabled = false;
+            }
         });
     });
 </script>
