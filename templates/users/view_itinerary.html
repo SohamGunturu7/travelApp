@@ -97,12 +97,11 @@
     <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="mb-0">Your Day-by-Day Itinerary</h2>
-            <button class="btn btn-sm btn-outline-primary" id="expand-all-btn">Expand All</button>
         </div>
         
         <div class="day-navigation d-flex flex-wrap gap-2 mb-3">
             {% for day in days %}
-                <button class="btn btn-outline-primary day-nav-btn" data-day="{{ day.day_number }}">
+                <button class="btn {% if forloop.first %}btn-primary{% else %}btn-outline-primary{% endif %} day-nav-btn" data-day="{{ day.day_number }}">
                     Day {{ day.day_number }}
                 </button>
             {% endfor %}
@@ -112,21 +111,19 @@
     <!-- Day-by-Day Itinerary -->
     <div class="day-by-day-itinerary">
         {% for day in days %}
-            <div class="card border-0 shadow-lg rounded-3 mb-4 day-card" id="day-{{ day.day_number }}">
+            <div class="card border-0 shadow-lg rounded-3 mb-4 day-card" id="day-{{ day.day_number }}" {% if not forloop.first %}style="display: none;"{% endif %}>
                 <div class="card-header bg-white p-3 d-flex justify-content-between align-items-center">
                     <h3 class="mb-0">
                         <i class="fas fa-calendar-day me-2 text-primary"></i>
                         Day {{ day.day_number }}
                     </h3>
-                    <button class="btn btn-sm btn-outline-primary toggle-day-btn" data-day="{{ day.day_number }}">
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
                 </div>
-                <div class="card-body p-0 day-content">
+                <div class="card-body p-0">
                     <div class="timeline">
                         {% for activity in day.activities %}
                             <div class="timeline-item">
-                                <div class="timeline-dot"></div>
+                                <!-- Removing the blue dot -->
+                                <!-- <div class="timeline-dot"></div> -->
                                 <div class="timeline-content">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <div class="d-flex align-items-center">
@@ -149,7 +146,7 @@
                                     {% if activity.cost %}
                                         <div class="mt-2">
                                             <span class="badge bg-success bg-opacity-10 text-success">
-                                                <i class="fas fa-dollar-sign me-1"></i>{{ activity.cost }}
+                                                {{ activity.cost }}
                                             </span>
                                         </div>
                                     {% endif %}
@@ -200,12 +197,12 @@
                         <div class="invalid-feedback">Please enter an activity name</div>
                     </div>
                     <div class="mb-3">
-                        <label for="activityDescription" class="form-label">Description (Optional)</label>
+                        <label for="activityDescription" class="form-label">Description</label>
                         <textarea class="form-control" id="activityDescription" rows="3" 
                                 placeholder="Add any additional details about the activity"></textarea>
                     </div>
                     <div class="mb-3">
-                        <label for="activityCost" class="form-label">Cost (Optional)</label>
+                        <label for="activityCost" class="form-label">Cost</label>
                         <div class="input-group">
                             <span class="input-group-text">$</span>
                             <input type="text" class="form-control" id="activityCost" 
@@ -221,6 +218,8 @@
         </div>
     </div>
 </div>
+
+<div id="itinerary-data" data-itinerary-id="{{ itinerary.id }}"></div>
 {% endblock %}
 
 {% block extra_css %}
@@ -267,12 +266,15 @@
     
     .timeline-dot {
         position: absolute;
-        left: -0.5rem;
+        left: 1.65rem; /* Fixed to center on timeline line */
+        top: 0.6rem;
         width: 1rem;
         height: 1rem;
         border-radius: 50%;
         background: #0d6efd;
         border: 2px solid #fff;
+        z-index: 1;
+        transform: translateX(-50%); /* Center the dot on the line */
     }
     
     .timeline-content {
@@ -336,7 +338,7 @@
             display: none !important;
         }
         
-        .day-content {
+        .day-card {
             display: block !important;
         }
         
@@ -398,93 +400,37 @@
 {{ block.super }}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Initially collapse all day details except the first one
-        const dayCards = document.querySelectorAll('.day-card');
-        if (dayCards.length > 0) {
-            // Show first day
-            const firstDayContent = dayCards[0].querySelector('.day-content');
-            const firstDayBtn = dayCards[0].querySelector('.toggle-day-btn i');
-            
-            // Hide all other days
-            dayCards.forEach(function(card, index) {
-                if (index > 0) {
-                    const content = card.querySelector('.day-content');
-                    const btn = card.querySelector('.toggle-day-btn i');
-                    content.style.display = 'none';
-                    btn.className = 'fas fa-chevron-down';
-                }
-            });
-        }
-        
-        // Toggle day details
-        document.querySelectorAll('.toggle-day-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                const dayNumber = this.getAttribute('data-day');
-                const dayCard = document.getElementById('day-' + dayNumber);
-                const dayContent = dayCard.querySelector('.day-content');
-                const icon = this.querySelector('i');
-                
-                if (dayContent.style.display === 'none') {
-                    dayContent.style.display = 'block';
-                    icon.className = 'fas fa-chevron-up';
-                } else {
-                    dayContent.style.display = 'none';
-                    icon.className = 'fas fa-chevron-down';
-                }
-            });
-        });
-        
         // Day navigation buttons
         document.querySelectorAll('.day-nav-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 const dayNumber = this.getAttribute('data-day');
-                const dayCard = document.getElementById('day-' + dayNumber);
-                const dayContent = dayCard.querySelector('.day-content');
-                const icon = dayCard.querySelector('.toggle-day-btn i');
                 
-                // Show the clicked day
-                dayContent.style.display = 'block';
-                icon.className = 'fas fa-chevron-up';
+                // Hide all day cards
+                document.querySelectorAll('.day-card').forEach(card => {
+                    card.style.display = 'none';
+                });
                 
-                // Scroll to it
-                dayCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Show only the selected day
+                const selectedDay = document.getElementById('day-' + dayNumber);
+                if (selectedDay) {
+                    selectedDay.style.display = 'block';
+                }
+                
+                // Update button styles
+                document.querySelectorAll('.day-nav-btn').forEach(navBtn => {
+                    navBtn.classList.remove('btn-primary');
+                    navBtn.classList.add('btn-outline-primary');
+                });
+                
+                // Highlight the active button
+                this.classList.remove('btn-outline-primary');
+                this.classList.add('btn-primary');
             });
-        });
-        
-        // Expand/Collapse all button
-        const expandAllBtn = document.getElementById('expand-all-btn');
-        let allExpanded = false;
-        
-        expandAllBtn.addEventListener('click', function() {
-            const dayContents = document.querySelectorAll('.day-content');
-            const toggleBtns = document.querySelectorAll('.toggle-day-btn i');
-            
-            if (allExpanded) {
-                // Collapse all
-                dayContents.forEach(function(content) {
-                    content.style.display = 'none';
-                });
-                toggleBtns.forEach(function(btn) {
-                    btn.className = 'fas fa-chevron-down';
-                });
-                expandAllBtn.textContent = 'Expand All';
-            } else {
-                // Expand all
-                dayContents.forEach(function(content) {
-                    content.style.display = 'block';
-                });
-                toggleBtns.forEach(function(btn) {
-                    btn.className = 'fas fa-chevron-up';
-                });
-                expandAllBtn.textContent = 'Collapse All';
-            }
-            
-            allExpanded = !allExpanded;
         });
 
         const modal = new bootstrap.Modal(document.getElementById('activityModal'));
         const form = document.getElementById('activityForm');
-        const itineraryId = {{ itinerary.id }};
+        const itineraryId = document.getElementById('itinerary-data').dataset.itineraryId;
         
         // Add Activity
         document.querySelectorAll('.add-activity').forEach(button => {
@@ -510,7 +456,11 @@
                 document.getElementById('activityTime').value = activityCard.querySelector('h4').textContent.trim();
                 document.getElementById('activityName').value = activityCard.querySelector('h5').textContent.trim();
                 document.getElementById('activityDescription').value = activityCard.querySelector('p')?.textContent.trim() || '';
-                document.getElementById('activityCost').value = activityCard.querySelector('.badge')?.textContent.trim() || '';
+                
+                // Fix the cost extraction to remove dollar signs
+                let cost = activityCard.querySelector('.badge')?.textContent.trim() || '';
+                cost = cost.replace(/\$/g, '').trim();
+                document.getElementById('activityCost').value = cost;
                 
                 modal.show();
             });
@@ -605,7 +555,7 @@
                 loadBtn.disabled = true;
                 
                 // Fetch recommendations
-                const response = await fetch(`/itinerary/{{ itinerary.id }}/recommendations/`, {
+                const response = await fetch(`/itinerary/${itineraryId}/recommendations/`, {
                     headers: {
                         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
                     }
