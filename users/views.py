@@ -1,11 +1,14 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from .forms import UserRegisterForm, ItineraryForm
-from .models import Itinerary
+from .models import Itinerary, Activity
 import google.generativeai as genai
 import json
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.db import models
 
 # Configure Gemini API
 genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
@@ -183,5 +186,118 @@ CRITICAL: Your response must contain EXACTLY {end_day - start_day + 1} days of d
 
 @login_required
 def view_itinerary(request, pk):
-    itinerary = Itinerary.objects.get(pk=pk, user=request.user)
-    return render(request, 'users/view_itinerary.html', {'itinerary': itinerary})
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+    
+    # Get all activities for this itinerary
+    activities = Activity.objects.filter(itinerary=itinerary).order_by('day_number', 'order')
+    
+    # Group activities by day
+    days = {}
+    for activity in activities:
+        if activity.day_number not in days:
+            days[activity.day_number] = {
+                'day_number': activity.day_number,
+                'activities': []
+            }
+        days[activity.day_number]['activities'].append(activity)
+    
+    # Convert to sorted list for template
+    days_list = [days[day_num] for day_num in sorted(days.keys())]
+    
+    # If no activities exist yet and we have a generated plan, create initial activities
+    if not activities.exists() and itinerary.generated_plan:
+        generated_days = itinerary.days_itinerary
+        for day in generated_days:
+            day_number = int(day['day_number'])
+            for order, activity_data in enumerate(day['activities'], 1):
+                Activity.objects.create(
+                    itinerary=itinerary,
+                    day_number=day_number,
+                    time=activity_data['time'],
+                    activity=activity_data['activity'],
+                    description=activity_data.get('description', ''),
+                    cost=activity_data.get('cost', ''),
+                    order=order
+                )
+        # Refresh the activities after creating them
+        return redirect('view_itinerary', pk=pk)
+    
+    return render(request, 'users/view_itinerary.html', {
+        'itinerary': itinerary,
+        'days': days_list
+    })
+
+@login_required
+@require_http_methods(["POST"])
+def add_activity(request, pk):
+    try:
+        itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        if not all(key in data for key in ['day_number', 'time', 'activity']):
+            return JsonResponse({'error': 'Missing required fields'}, status=400)
+        
+        # Get the maximum order for the day
+        max_order = Activity.objects.filter(
+            itinerary=itinerary,
+            day_number=data['day_number']
+        ).aggregate(models.Max('order'))['order__max'] or 0
+        
+        activity = Activity.objects.create(
+            itinerary=itinerary,
+            day_number=data['day_number'],
+            time=data['time'],
+            activity=data['activity'],
+            description=data.get('description', ''),
+            cost=data.get('cost', ''),
+            order=max_order + 1
+        )
+        
+        return JsonResponse({
+            'id': activity.id,
+            'time': activity.time,
+            'activity': activity.activity,
+            'description': activity.description,
+            'cost': activity.cost
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_http_methods(["POST"])
+def edit_activity(request, pk, activity_id):
+    try:
+        activity = get_object_or_404(Activity, id=activity_id, itinerary__pk=pk, itinerary__user=request.user)
+        data = json.loads(request.body)
+        
+        # Update the activity fields
+        activity.time = data['time']
+        activity.activity = data['activity']
+        activity.description = data.get('description', '')
+        activity.cost = data.get('cost', '')
+        activity.save()
+        
+        return JsonResponse({
+            'id': activity.id,
+            'time': activity.time,
+            'activity': activity.activity,
+            'description': activity.description,
+            'cost': activity.cost
+        })
+    except Activity.DoesNotExist:
+        return JsonResponse({'error': 'Activity not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_activity(request, pk, activity_id):
+    try:
+        activity = get_object_or_404(Activity, id=activity_id, itinerary__pk=pk, itinerary__user=request.user)
+        activity.delete()
+        return JsonResponse({'status': 'success'})
+    except Activity.DoesNotExist:
+        return JsonResponse({'error': 'Activity not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
