@@ -525,11 +525,8 @@ class LoggedInPasswordResetView(auth_views.PasswordResetView):
 
     def get_initial(self):
         initial = super().get_initial()
-        if self.request.user.is_authenticated:
-            initial['email'] = self.request.user.email
         return initial
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
-        form.fields['email'].widget = forms.HiddenInput()
         return form
