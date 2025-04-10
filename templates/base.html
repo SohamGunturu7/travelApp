@@ -21,6 +21,12 @@
                         <li class="nav-item">
                             <a class="nav-link text-white hover-opacity-75 transition" href="{% url 'logout' %}">Logout</a>
                         </li>
+                        <li class="nav-item">
+                           <a class="nav-link text-white hover-opacity-75 transition" href="{% url 'delete_account' %}">Delete Account</a>
+                        </li>
+                        <li>
+                           <a class="nav-link text-white hover-opacity-75 transition" href="{% url 'update_profile' %}">Edit Profile</a>
+                        </li>
                     </ul>
                 </nav>
                 {% endif %}

@@ -19,22 +19,48 @@ class UserRegisterForm(UserCreationForm):
             user.save()
         return user
 
+
+class UserUpdateForm(forms.ModelForm):
+    username = forms.CharField(max_length=150, required=True, help_text='')
+
+    class Meta:
+        model = User
+        fields = ['username', 'email']
+
+
 class ItineraryForm(forms.ModelForm):
     interests = forms.MultipleChoiceField(
         choices=Itinerary.INTEREST_CHOICES,
         widget=forms.CheckboxSelectMultiple,
-        help_text="Select all that interest you"
-    )
-    
+        help_text="Select all that interest you")
+
     class Meta:
         model = Itinerary
-        fields = ['destination', 'start_date', 'end_date', 'budget', 'interests', 
-                 'number_of_people', 'preferred_pace']
+        fields = [
+            'destination', 'start_date', 'end_date', 'budget', 'interests',
+            'number_of_people', 'preferred_pace'
+        ]
         widgets = {
-            'start_date': forms.DateInput(attrs={'type': 'date', 'min': date.today().isoformat()}),
-            'end_date': forms.DateInput(attrs={'type': 'date', 'min': date.today().isoformat()}),
-            'budget': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
-            'number_of_people': forms.NumberInput(attrs={'min': '1', 'max': '20'}),
+            'start_date':
+            forms.DateInput(attrs={
+                'type': 'date',
+                'min': date.today().isoformat()
+            }),
+            'end_date':
+            forms.DateInput(attrs={
+                'type': 'date',
+                'min': date.today().isoformat()
+            }),
+            'budget':
+            forms.NumberInput(attrs={
+                'min': '0',
+                'step': '0.01'
+            }),
+            'number_of_people':
+            forms.NumberInput(attrs={
+                'min': '1',
+                'max': '20'
+            }),
         }
 
     def clean(self):
@@ -46,8 +72,11 @@ class ItineraryForm(forms.ModelForm):
             if start_date < date.today():
                 raise forms.ValidationError("Start date cannot be in the past")
             if end_date < start_date:
-                raise forms.ValidationError("End date must be after start date")
+                raise forms.ValidationError(
+                    "End date must be after start date")
             if (end_date - start_date).days > 30:
-                raise forms.ValidationError("Trip duration cannot exceed 30 days")
+                raise forms.ValidationError(
+                    "Trip duration cannot exceed 30 days")
 
-        return cleaned_data 
+        return cleaned_data
+
