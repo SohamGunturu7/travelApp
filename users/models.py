@@ -120,6 +120,7 @@ class Activity(models.Model):
     description = models.TextField(blank=True)
     cost = models.CharField(max_length=50, blank=True)
     order = models.PositiveIntegerField()
+    location = models.CharField(max_length=100, blank=True, null=True)  # Store coordinates as "longitude,latitude"
 
     class Meta:
         ordering = ['day_number', 'order', 'time']

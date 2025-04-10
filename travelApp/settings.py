@@ -127,3 +127,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Authentication settings
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'login'
+
+# MapBox API Key
+MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoidmF0c2FsZCIsImEiOiJjbTlhaG9hMzYwNTl2MmpwdnQ2OXE0eDE1In0.2mjPHrIO9jNCWF_zPGcRSg'

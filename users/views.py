@@ -9,6 +9,8 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.db import models
+from django.conf import settings
+import requests
 
 # Configure Gemini API
 genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
@@ -473,3 +475,117 @@ Important:
         return JsonResponse({
             'error': f'Error generating recommendations: {str(e)}'
         }, status=500)
+
+@login_required
+def map_view(request):
+    itinerary_id = request.GET.get('itinerary_id')
+    day_number = request.GET.get('day')
+    
+    context = {
+        'mapbox_access_token': settings.MAPBOX_ACCESS_TOKEN,
+        'itinerary_id': itinerary_id,
+        'day_number': day_number
+    }
+    
+    if itinerary_id and day_number:
+        try:
+            itinerary = Itinerary.objects.get(id=itinerary_id, user=request.user)
+            activities = Activity.objects.filter(
+                itinerary=itinerary,
+                day_number=day_number
+            ).order_by('time')
+            
+            # Get destination coordinates using Mapbox Geocoding API
+            geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{itinerary.destination}.json"
+            params = {
+                'access_token': settings.MAPBOX_ACCESS_TOKEN,
+                'types': 'place',
+                'limit': 1
+            }
+            
+            response = requests.get(geocode_url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if data['features']:
+                    coordinates = data['features'][0]['center']
+                    destination_coords = {
+                        'lng': coordinates[0],
+                        'lat': coordinates[1]
+                    }
+                else:
+                    destination_coords = {
+                        'lng': 0,
+                        'lat': 0
+                    }
+            else:
+                destination_coords = {
+                    'lng': 0,
+                    'lat': 0
+                }
+            
+            # Process activities and geocode their locations if needed
+            processed_activities = []
+            for activity in activities:
+                activity_data = {
+                    'id': activity.id,
+                    'time': activity.time,
+                    'activity': activity.activity,
+                    'description': activity.description,
+                    'location': None
+                }
+                
+                # If activity has a location, use it
+                if activity.location:
+                    activity_data['location'] = activity.location
+                else:
+                    # Try to geocode the activity name with the destination city
+                    search_query = f"{activity.activity}, {itinerary.destination}"
+                    
+                    # Determine place type based on activity keywords
+                    place_types = ['poi', 'address']  # Default types
+                    if any(keyword in activity.activity.lower() for keyword in ['cafe', 'restaurant', 'food', 'dining']):
+                        place_types = ['poi']
+                    elif any(keyword in activity.activity.lower() for keyword in ['museum', 'gallery', 'art']):
+                        place_types = ['poi']
+                    elif any(keyword in activity.activity.lower() for keyword in ['park', 'garden', 'nature']):
+                        place_types = ['poi']
+                    elif any(keyword in activity.activity.lower() for keyword in ['shop', 'store', 'market']):
+                        place_types = ['poi']
+                    
+                    geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{search_query}.json"
+                    params = {
+                        'access_token': settings.MAPBOX_ACCESS_TOKEN,
+                        'proximity': f"{destination_coords['lng']},{destination_coords['lat']}",
+                        'types': ','.join(place_types),
+                        'limit': 1
+                    }
+                    
+                    response = requests.get(geocode_url, params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data['features']:
+                            # Check if the result is within a reasonable distance from the destination
+                            result_coords = data['features'][0]['center']
+                            distance = ((result_coords[0] - destination_coords['lng'])**2 + 
+                                      (result_coords[1] - destination_coords['lat'])**2)**0.5
+                            
+                            # If the result is within 0.5 degrees (roughly 50km) of the destination
+                            if distance < 0.5:
+                                activity_data['location'] = f"{result_coords[0]},{result_coords[1]}"
+                                # Save the location for future use
+                                activity.location = activity_data['location']
+                                activity.save()
+                
+                processed_activities.append(activity_data)
+            
+            context.update({
+                'activities': processed_activities,
+                'destination': {
+                    'name': itinerary.destination,
+                    'coordinates': destination_coords
+                }
+            })
+        except (Itinerary.DoesNotExist, Activity.DoesNotExist):
+            pass
+    
+    return render(request, 'map.html', context)

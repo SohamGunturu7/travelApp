@@ -117,13 +117,14 @@
                         <i class="fas fa-calendar-day me-2 text-primary"></i>
                         Day {{ day.day_number }}
                     </h3>
+                    <a href="{% url 'map' %}?itinerary_id={{ itinerary.id }}&day={{ day.day_number }}" class="btn btn-outline-primary" target="_blank">
+                        <i class="fas fa-map me-2"></i>View Map
+                    </a>
                 </div>
                 <div class="card-body p-0">
                     <div class="timeline">
                         {% for activity in day.activities %}
                             <div class="timeline-item">
-                                <!-- Removing the blue dot -->
-                                <!-- <div class="timeline-dot"></div> -->
                                 <div class="timeline-content">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <div class="d-flex align-items-center">
