@@ -93,6 +93,36 @@
         </div>
     </div>
 
+    <!-- Hidden Gems Section -->
+    <div class="card border-0 shadow-lg rounded-3 mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="h4 mb-0">
+                    <i class="fas fa-gem me-2 text-primary"></i>
+                    Hidden Gems
+                </h2>
+                <button class="btn btn-primary" id="loadHiddenGems">
+                    <i class="fas fa-search me-2"></i>Discover Hidden Gems
+                </button>
+            </div>
+            
+            <!-- Hidden Gems content -->
+            <div id="hiddenGemsContent" style="display: none;">
+                <div class="row gem-grid g-4" id="hiddenGemsList">
+                    <!-- Hidden gems will be populated here -->
+                </div>
+            </div>
+            
+            <!-- Loading spinner -->
+            <div id="hiddenGemsLoading" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted">Discovering unique local experiences...</p>
+            </div>
+        </div>
+    </div>
+
     <!-- Day Navigation -->
     <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -396,6 +426,70 @@
         padding-top: 0.5rem;
         border-top: 1px solid #e9ecef;
     }
+    
+    .hidden-gem-card {
+        height: 100%;  /* This ensures all cards in a row have the same height */
+        background: #fff;
+        border-radius: 1rem;
+        overflow: hidden;
+        transition: transform 0.2s;
+        position: relative;
+        margin-bottom: 0;  /* Remove bottom margin since we'll handle spacing with the grid */
+    }
+    
+    .hidden-gem-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .gem-category {
+        position: absolute;
+        bottom: 1rem;
+        left: 1rem;
+        z-index: 1;
+        margin-left: 0;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    
+    .hidden-gem-card:hover .gem-category {
+        opacity: 1;
+    }
+    
+    .gem-content {
+        padding: 1.5rem;
+        padding-bottom: 3.5rem;
+    }
+    
+    .h5 {
+        padding-right: 0;
+        position: relative;
+    }
+    
+    .gem-details {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    .gem-tip {
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .gem-match {
+        border-top: 1px solid #e9ecef;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        font-size: 0.875rem;
+    }
+    
+    /* Add this new class */
+    .gem-grid {
+        --bs-gutter-x: 1.5rem;  /* Horizontal spacing between cards */
+        --bs-gutter-y: 1.5rem;  /* Vertical spacing between cards */
+    }
 </style>
 {% endblock %}
 
@@ -617,6 +711,100 @@
                 alert('Error loading recommendations. Please try again.');
             } finally {
                 loadBtn.disabled = false;
+            }
+        });
+
+        const loadGemsBtn = document.getElementById('loadHiddenGems');
+        const gemsContent = document.getElementById('hiddenGemsContent');
+        const gemsLoading = document.getElementById('hiddenGemsLoading');
+        const gemsList = document.getElementById('hiddenGemsList');
+        
+        loadGemsBtn.addEventListener('click', async function() {
+            try {
+                // Show loading state
+                gemsContent.style.display = 'none';
+                gemsLoading.style.display = 'block';
+                loadGemsBtn.disabled = true;
+                
+                // Fetch hidden gems
+                const response = await fetch(`/itinerary/${itineraryId}/hidden-gems/`, {
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load hidden gems');
+                }
+                
+                // Populate hidden gems
+                gemsList.innerHTML = data.hidden_gems.map(gem => `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="hidden-gem-card shadow-sm">
+                            <div class="gem-content">
+                                <span class="badge bg-primary bg-opacity-10 text-primary gem-category">
+                                    ${gem.category}
+                                </span>
+                                <h3 class="h5 mb-3">${gem.name}</h3>
+                                <p class="mb-3">${gem.description}</p>
+                                
+                                <div class="gem-details">
+                                    <p class="mb-2">
+                                        <i class="fas fa-clock me-2 text-primary"></i>
+                                        ${gem.time_needed}
+                                    </p>
+                                    <p class="mb-2">
+                                        <i class="fas fa-dollar-sign me-2 text-primary"></i>
+                                        ${gem.estimated_cost}
+                                    </p>
+                                    <p class="mb-2">
+                                        <i class="fas fa-calendar-alt me-2 text-primary"></i>
+                                        Best time: ${gem.best_time}
+                                    </p>
+                                </div>
+                                
+                                <div class="gem-tip">
+                                    <i class="fas fa-lightbulb text-warning me-2"></i>
+                                    <strong>Insider Tip:</strong> ${gem.insider_tips}
+                                </div>
+                                
+                                <div class="gem-match text-muted">
+                                    <i class="fas fa-check-circle text-success me-2"></i>
+                                    ${gem.match_interests}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Show content
+                gemsLoading.style.display = 'none';
+                gemsContent.style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                gemsLoading.style.display = 'none';
+                
+                // Show error message
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-3';
+                errorDiv.innerHTML = `
+                    <h4 class="alert-heading">Error Loading Hidden Gems</h4>
+                    <p>${error.message}</p>
+                    <hr>
+                    <p class="mb-0">Please try again. If the problem persists, contact support.</p>
+                `;
+                
+                loadGemsBtn.parentNode.insertBefore(errorDiv, loadGemsBtn.nextSibling);
+                
+                // Remove error message after 5 seconds
+                setTimeout(() => {
+                    errorDiv.remove();
+                }, 5000);
+            } finally {
+                loadGemsBtn.disabled = false;
             }
         });
     });

@@ -25,6 +25,7 @@ urlpatterns = [
     path('itinerary/<int:pk>/recommendations/',
          views.get_recommendations,
          name='get_recommendations'),
+    path('itinerary/<int:pk>/hidden-gems/', views.get_hidden_gems, name='get_hidden_gems'),
 
     # Password reset views:
     path('password_reset/',
