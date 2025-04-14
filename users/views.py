@@ -119,14 +119,21 @@ ABSOLUTELY REQUIRED:
 5. If you run out of unique activities, create variations or revisit popular spots at different times
 6. The response MUST contain "Day {start_day}" through "Day {end_day}" with no gaps
 7. DO NOT include dollar signs ($) in any cost values - write numbers only
+8. For each activity, provide the exact location name and address in the format: [Location: Place Name, Address]
+9. For each location, provide the exact coordinates in the format: [Coordinates: latitude, longitude]
 
 Format each day EXACTLY as follows:
 
-Day [X] - [Full Date]
-07:00 - [Activity] - [Cost without $ sign] - [Details]
-08:30 - [Next Activity] - [Cost without $ sign] - [Details]
-(Continue with FULL day schedule)
-22:00 - Return to Hotel - [Cost without $ sign] - [Transport Details]
+Day [X]
+[Time] - [Activity] - [Cost] - [Details] [Location: Place Name, Address] [Coordinates: latitude, longitude]
+
+Example of REQUIRED format:
+Day 1
+07:00 - Breakfast at Morning Cafe - 15 - Local specialties [Location: Morning Cafe, 123 Main St, City] [Coordinates: 40.7128, -74.0060]
+08:30 - Transit to Location - 3 - Bus details [Location: Main Bus Station, 456 Transit Ave, City] [Coordinates: 40.7130, -74.0062]
+09:00 - Activity - 25 - Full details [Location: Museum Name, 789 Museum St, City] [Coordinates: 40.7132, -74.0064]
+(... complete day schedule ...)
+22:00 - Return to Hotel - 10 - Transport details [Location: Hotel Name, 101 Hotel Blvd, City] [Coordinates: 40.7134, -74.0066]
 
 Required for EACH day:
 - Breakfast (07:00-08:30)
@@ -139,16 +146,10 @@ Required for EACH day:
 - Return to hotel
 - ALL transit times
 - ALL costs (numbers only, NO dollar signs)
+- ALL locations with exact addresses
+- ALL coordinates for each location
 
-Example of REQUIRED format:
-Day {start_day} - [Date]
-07:00 - Breakfast at Morning Cafe - 15 - Local specialties
-08:30 - Transit to Location - 3 - Bus details
-09:00 - Activity - 25 - Full details
-(... complete day schedule ...)
-22:00 - Return to Hotel - 10 - Transport details
-
-CRITICAL: Your response must contain EXACTLY {end_day - start_day + 1} days of detailed schedules."""
+CRITICAL: Your response must contain EXACTLY {end_day - start_day + 1} days of detailed schedules with exact locations, addresses, and coordinates."""
 
                     response = model.generate_content(chunk_prompt)
                     if response.text:
@@ -213,21 +214,53 @@ def view_itinerary(request, pk):
         for day in generated_days:
             day_number = int(day['day_number'])
             for order, activity_data in enumerate(day['activities'], 1):
-                Activity.objects.create(
+                # Create activity with coordinates if available
+                activity = Activity.objects.create(
                     itinerary=itinerary,
                     day_number=day_number,
                     time=activity_data['time'],
                     activity=activity_data['activity'],
                     description=activity_data.get('description', ''),
                     cost=activity_data.get('cost', ''),
+                    location=activity_data.get('location', ''),
                     order=order
                 )
+                
+                # Save coordinates if available
+                if activity_data.get('coordinates'):
+                    activity.latitude = activity_data['coordinates']['latitude']
+                    activity.longitude = activity_data['coordinates']['longitude']
+                    activity.save()
+                
+                # If we have a location but no coordinates, try to geocode it
+                elif activity.location:
+                    try:
+                        # Use Mapbox Geocoding API to get coordinates
+                        geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{activity.location}.json"
+                        params = {
+                            'access_token': settings.MAPBOX_ACCESS_TOKEN,
+                            'types': 'poi,address',
+                            'limit': 1
+                        }
+                        
+                        response = requests.get(geocode_url, params=params)
+                        if response.status_code == 200:
+                            data = response.json()
+                            if data['features']:
+                                coordinates = data['features'][0]['center']
+                                activity.longitude = coordinates[0]
+                                activity.latitude = coordinates[1]
+                                activity.save()
+                    except Exception as e:
+                        print(f"Error geocoding location: {e}")
+        
         # Refresh the activities after creating them
         return redirect('view_itinerary', pk=pk)
     
     return render(request, 'users/view_itinerary.html', {
         'itinerary': itinerary,
-        'days': days_list
+        'days': days_list,
+        'mapbox_access_token': settings.MAPBOX_ACCESS_TOKEN
     })
 
 @login_required
@@ -280,6 +313,7 @@ def add_activity(request, pk):
             activity=data['activity'],
             description=data.get('description', ''),
             cost=data.get('cost', ''),
+            location=data.get('location', ''),
             order=order
         )
         
@@ -347,6 +381,7 @@ def edit_activity(request, pk, activity_id):
         activity.activity = data['activity']
         activity.description = data.get('description', '')
         activity.cost = data.get('cost', '')
+        activity.location = data.get('location', '')
         activity.save()
         
         return JsonResponse({
@@ -534,11 +569,20 @@ def map_view(request):
                     'location': None
                 }
                 
-                # If activity has a location, use it
-                if activity.location:
-                    activity_data['location'] = activity.location
-                else:
-                    # Try to geocode the activity name with the destination city
+                # If activity has coordinates, use them
+                if activity.latitude and activity.longitude:
+                    activity_data['location'] = f"{activity.longitude},{activity.latitude}"
+                # If activity has a location string, try to geocode it
+                elif activity.location:
+                    try:
+                        coords = activity.location.split(',')
+                        if len(coords) == 2:
+                            activity_data['location'] = activity.location
+                    except:
+                        pass
+                
+                # If still no location, try to geocode the activity name
+                if not activity_data['location']:
                     search_query = f"{activity.activity}, {itinerary.destination}"
                     
                     # Determine place type based on activity keywords
@@ -572,8 +616,9 @@ def map_view(request):
                             # If the result is within 0.5 degrees (roughly 50km) of the destination
                             if distance < 0.5:
                                 activity_data['location'] = f"{result_coords[0]},{result_coords[1]}"
-                                # Save the location for future use
-                                activity.location = activity_data['location']
+                                # Save the coordinates for future use
+                                activity.longitude = result_coords[0]
+                                activity.latitude = result_coords[1]
                                 activity.save()
                 
                 processed_activities.append(activity_data)

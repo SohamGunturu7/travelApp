@@ -10,23 +10,30 @@
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    
+    .map-error {
+        color: red;
+        padding: 20px;
+        text-align: center;
+    }
     .mapboxgl-popup {
         max-width: 300px;
     }
-    
     .mapboxgl-popup-content {
-        padding: 1rem;
+        padding: 15px;
     }
-    
-    .activity-time {
-        font-weight: bold;
+    .mapboxgl-popup-content h6 {
+        margin: 0 0 5px 0;
         color: #0d6efd;
     }
-    
-    .activity-description {
-        font-size: 0.9rem;
+    .mapboxgl-popup-content p {
+        margin: 0;
         color: #6c757d;
+    }
+    .mapboxgl-marker {
+        cursor: pointer;
+    }
+    .back-button {
+        margin-bottom: 1rem;
     }
 </style>
 {% endblock %}
@@ -37,14 +44,20 @@
         <div class="col-12">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h2 class="card-title mb-4">
-                        {% if day_number %}
-                            Day {{ day_number }} Activities in {{ destination.name }}
-                        {% else %}
-                            Interactive Map
-                        {% endif %}
-                    </h2>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2 class="card-title mb-0">
+                            {% if day_number %}
+                                Day {{ day_number }} Activities in {{ destination.name }}
+                            {% else %}
+                                Interactive Map
+                            {% endif %}
+                        </h2>
+                        <a href="{% url 'view_itinerary' itinerary_id %}" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Itinerary
+                        </a>
+                    </div>
                     <div id="map"></div>
+                    <div id="map-error" class="map-error" style="display: none;"></div>
                 </div>
             </div>
         </div>
@@ -57,125 +70,213 @@
 <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
 
 <script>
-    // Initialize MapBox
-    mapboxgl.accessToken = '{{ mapbox_access_token }}';
-    
-    const map = new mapboxgl.Map({
-        container: 'map',
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [{{ destination.coordinates.lng }}, {{ destination.coordinates.lat }}], // Center on destination
-        zoom: 12 // Zoom level for city view
-    });
+    // Debug information
+    console.log('Mapbox Access Token:', '{{ mapbox_access_token }}');
+    console.log('Destination:', '{{ destination.name }}');
+    console.log('Destination Coordinates:', '{{ destination.coordinates.lng }}', '{{ destination.coordinates.lat }}');
+    console.log('Activities:', {{ activities|safe }});
 
-    // Add navigation controls
-    map.addControl(new mapboxgl.NavigationControl());
+    try {
+        // Initialize MapBox
+        mapboxgl.accessToken = '{{ mapbox_access_token }}';
+        
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [{{ destination.coordinates.lng }}, {{ destination.coordinates.lat }}], // Center on destination
+            zoom: 12 // Zoom level for city view
+        });
 
-    // Add geolocation control
-    map.addControl(
-        new mapboxgl.GeolocateControl({
-            positionOptions: {
-                enableHighAccuracy: true
-            },
-            trackUserLocation: true,
-            showUserHeading: true
-        })
-    );
+        // Add navigation controls
+        map.addControl(new mapboxgl.NavigationControl());
 
-    // Wait for the map to load
-    map.on('load', function() {
-        {% if activities %}
-            const activities = {{ activities|safe }};
-            const coordinates = [];
-            const markers = [];
-            
-            // Add destination marker
-            const destinationMarker = new mapboxgl.Marker({
-                color: '#28a745' // Green color for destination
+        // Add geolocation control
+        map.addControl(
+            new mapboxgl.GeolocateControl({
+                positionOptions: {
+                    enableHighAccuracy: true
+                },
+                trackUserLocation: true,
+                showUserHeading: true
             })
-            .setLngLat([{{ destination.coordinates.lng }}, {{ destination.coordinates.lat }}])
-            .setPopup(
-                new mapboxgl.Popup({ offset: 25 })
-                .setHTML(`
-                    <div>
-                        <h5 class="mb-2">{{ destination.name }}</h5>
-                        <p class="text-muted small">Your destination</p>
-                    </div>
-                `)
-            )
-            .addTo(map);
+        );
+
+        // Wait for the map to load
+        map.on('load', function() {
+            console.log('Map loaded successfully');
             
-            // Add markers for each activity
-            activities.forEach((activity, index) => {
-                if (activity.location) {
-                    const coords = activity.location.split(',').map(coord => parseFloat(coord.trim()));
-                    
-                    // Create a marker
-                    const marker = new mapboxgl.Marker({
-                        color: '#0d6efd'
-                    })
-                    .setLngLat(coords)
-                    .setPopup(
-                        new mapboxgl.Popup({ offset: 25 })
-                        .setHTML(`
-                            <div>
-                                <h6 class="activity-time">${activity.time}</h6>
-                                <h5 class="mb-2">${activity.activity}</h5>
-                                ${activity.description ? `<p class="activity-description">${activity.description}</p>` : ''}
-                            </div>
-                        `)
-                    )
-                    .addTo(map);
-                    
-                    markers.push(marker);
-                    coordinates.push(coords);
+            // Create a GeoJSON source for markers
+            const markers = {
+                type: 'FeatureCollection',
+                features: []
+            };
+
+            // Create a GeoJSON source for the route
+            const route = {
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'LineString',
+                    coordinates: []
+                }
+            };
+
+            // Process activities and add them to the map
+            {% for activity in activities %}
+                {% if activity.location %}
+                    {% if not 'hotel' in activity.activity.lower and not 'check-in' in activity.activity.lower and not 'check-out' in activity.activity.lower %}
+                        console.log('Processing activity:', '{{ activity.activity }}', 'Location:', '{{ activity.location }}');
+                        const coords_{{ forloop.counter }} = '{{ activity.location }}'.split(',').map(Number);
+                        const lng_{{ forloop.counter }} = coords_{{ forloop.counter }}[0];
+                        const lat_{{ forloop.counter }} = coords_{{ forloop.counter }}[1];
+
+                        // Add marker for activity
+                        markers.features.push({
+                            type: 'Feature',
+                            properties: {
+                                title: '{{ activity.activity }}',
+                                description: '{{ activity.time }}',
+                                order: {{ forloop.counter }}
+                            },
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [lng_{{ forloop.counter }}, lat_{{ forloop.counter }}]
+                            }
+                        });
+
+                        // Add point to route
+                        route.geometry.coordinates.push([lng_{{ forloop.counter }}, lat_{{ forloop.counter }}]);
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+
+            console.log('Markers:', markers);
+            console.log('Route:', route);
+
+            // Add markers source and layer
+            map.addSource('markers', {
+                type: 'geojson',
+                data: markers
+            });
+
+            // Add custom marker images
+            map.loadImage('https://docs.mapbox.com/mapbox-gl-js/assets/custom_marker.png', function(error, image) {
+                if (error) throw error;
+                map.addImage('custom-marker', image);
+                
+                // Add marker layer
+                map.addLayer({
+                    id: 'markers',
+                    type: 'symbol',
+                    source: 'markers',
+                    layout: {
+                        'icon-image': 'custom-marker',
+                        'icon-size': 0.8,
+                        'text-field': ['get', 'order'],
+                        'text-font': ['Open Sans Bold'],
+                        'text-size': 16,
+                        'text-offset': [0, 1.25],
+                        'text-anchor': 'top',
+                        'text-allow-overlap': true
+                    },
+                    paint: {
+                        'text-color': '#ffffff',
+                        'text-halo-color': '#000000',
+                        'text-halo-width': 2
+                    }
+                });
+            });
+
+            // Add route source and layer
+            map.addSource('route', {
+                type: 'geojson',
+                data: route
+            });
+
+            map.addLayer({
+                id: 'route',
+                type: 'line',
+                source: 'route',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': '#3b82f6',
+                    'line-width': 4,
+                    'line-opacity': 0.7
                 }
             });
-            
-            // If we have coordinates, fit the map bounds to show all markers
-            if (coordinates.length > 0) {
-                const bounds = coordinates.reduce((bounds, coord) => {
-                    return bounds.extend(coord);
-                }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
-                
-                // Include destination in bounds
-                bounds.extend([{{ destination.coordinates.lng }}, {{ destination.coordinates.lat }}]);
-                
-                map.fitBounds(bounds, {
-                    padding: 50,
-                    maxZoom: 15
-                });
-                
-                // If we have more than one location, add a route line
-                if (coordinates.length > 1) {
-                    map.addSource('route', {
-                        'type': 'geojson',
-                        'data': {
-                            'type': 'Feature',
-                            'properties': {},
-                            'geometry': {
-                                'type': 'LineString',
-                                'coordinates': coordinates
-                            }
-                        }
-                    });
-                    
-                    map.addLayer({
-                        'id': 'route',
-                        'type': 'line',
-                        'source': 'route',
-                        'layout': {
-                            'line-join': 'round',
-                            'line-cap': 'round'
-                        },
-                        'paint': {
-                            'line-color': '#0d6efd',
-                            'line-width': 3,
-                            'line-dasharray': [2, 2]
-                        }
-                    });
+
+            // Add route numbers
+            map.addLayer({
+                id: 'route-numbers',
+                type: 'symbol',
+                source: 'route',
+                layout: {
+                    'symbol-placement': 'line-center',
+                    'text-field': ['get', 'order'],
+                    'text-font': ['Open Sans Bold'],
+                    'text-size': 14,
+                    'text-allow-overlap': true
+                },
+                paint: {
+                    'text-color': '#ffffff',
+                    'text-halo-color': '#3b82f6',
+                    'text-halo-width': 2
                 }
+            });
+
+            // Add popups to markers
+            map.on('click', 'markers', function(e) {
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const properties = e.features[0].properties;
+                
+                while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                    coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                }
+                
+                new mapboxgl.Popup()
+                    .setLngLat(coordinates)
+                    .setHTML(`
+                        <h6>${properties.title}</h6>
+                        <p class="mb-0">${properties.description}</p>
+                    `)
+                    .addTo(map);
+            });
+
+            // Change cursor to pointer when hovering over markers
+            map.on('mouseenter', 'markers', function() {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'markers', function() {
+                map.getCanvas().style.cursor = '';
+            });
+
+            // Fit map to show all markers and route
+            if (markers.features.length > 0) {
+                const bounds = new mapboxgl.LngLatBounds();
+                markers.features.forEach(function(feature) {
+                    bounds.extend(feature.geometry.coordinates);
+                });
+                map.fitBounds(bounds, {
+                    padding: 50
+                });
             }
-        {% endif %}
-    });
+        });
+
+        // Handle map errors
+        map.on('error', function(e) {
+            console.error('Map error:', e);
+            document.getElementById('map-error').style.display = 'block';
+            document.getElementById('map-error').textContent = 'Error loading map: ' + e.error;
+        });
+
+    } catch (error) {
+        console.error('Error initializing map:', error);
+        document.getElementById('map-error').style.display = 'block';
+        document.getElementById('map-error').textContent = 'Error initializing map: ' + error.message;
+    }
 </script>
 {% endblock %} 
