@@ -680,3 +680,85 @@ def map_view(request):
             print(f"Error in map_view: {str(e)}")
 
     return render(request, 'map.html', context)
+
+
+@login_required
+def get_hidden_gems(request, pk):
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+    
+    try:
+        # Configure Gemini API
+        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+        
+        generation_config = {
+            "temperature": 0.9,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 2048,
+        }
+
+        model = genai.GenerativeModel(
+            model_name="models/gemini-1.5-pro",
+            generation_config=generation_config
+        )
+
+        prompt = f"""As a local expert in {itinerary.destination}, recommend 5 hidden gems and unique experiences that most tourists miss. Consider these user interests: {', '.join(itinerary.interests)}.
+
+Focus on:
+- Local favorites
+- Off-the-beaten-path locations
+- Authentic cultural experiences
+- Unique activities matching user interests
+- Places with historical or cultural significance
+- Local markets or artisan shops
+- Hidden viewpoints or photo spots
+- Family-run establishments
+
+Return the response in this exact JSON format:
+{{
+    "hidden_gems": [
+        {{
+            "name": "string",
+            "category": "string (e.g., 'Local Market', 'Viewpoint', 'Cultural Site')",
+            "description": "string",
+            "best_time": "string",
+            "insider_tips": "string",
+            "why_special": "string",
+            "match_interests": "string (explain how it matches user interests)",
+            "estimated_cost": "string (in $ format)",
+            "time_needed": "string"
+        }}
+    ]
+}}
+
+Ensure recommendations are:
+- Genuinely local and unique
+- Not typically found in standard tourist guides
+- Accessible and safe
+- Aligned with user interests: {', '.join(itinerary.interests)}
+- Within reasonable budget considering total trip budget: ${itinerary.budget}
+"""
+
+        response = model.generate_content(prompt)
+        
+        if not response.text:
+            raise ValueError("No response received from the AI model")
+
+        try:
+            recommendations = json.loads(response.text)
+            return JsonResponse(recommendations)
+        except json.JSONDecodeError:
+            # Try to extract JSON if there's additional text
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response.text)
+            if json_match:
+                recommendations = json.loads(json_match.group(0))
+                return JsonResponse(recommendations)
+            else:
+                raise ValueError("Invalid JSON format in response")
+                
+    except Exception as e:
+        print(f"Error generating hidden gems: {str(e)}")
+        return JsonResponse({
+            'error': f'Error finding hidden gems: {str(e)}'
+        }, status=500)
