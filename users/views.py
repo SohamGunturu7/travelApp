@@ -12,6 +12,9 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.db import models
+from django.conf import settings
+import requests
+
 
 # Configure Gemini API
 # probably don't commit an api key to a github
@@ -148,14 +151,20 @@ ABSOLUTELY REQUIRED:
 5. If you run out of unique activities, create variations or revisit popular spots at different times
 6. The response MUST contain "Day {start_day}" through "Day {end_day}" with no gaps
 7. DO NOT include dollar signs ($) in any cost values - write numbers only
+8. For each activity, provide the exact location name and address in the format: [Location: Place Name, Address]
+9. For each location, provide the exact coordinates in the format: [Coordinates: latitude, longitude]
 
 Format each day EXACTLY as follows:
 
-Day [X] - [Full Date]
-07:00 - [Activity] - [Cost without $ sign] - [Details]
-08:30 - [Next Activity] - [Cost without $ sign] - [Details]
-(Continue with FULL day schedule)
-22:00 - Return to Hotel - [Cost without $ sign] - [Transport Details]
+Day [X]
+[Time] - [Activity] - [Cost] - [Details] [Location: Place Name, Address] [Coordinates: latitude, longitude]
+Example of REQUIRED format:
+Day 1
+07:00 - Breakfast at Morning Cafe - 15 - Local specialties [Location: Morning Cafe, 123 Main St, City] [Coordinates: 40.7128, -74.0060]
+08:30 - Transit to Location - 3 - Bus details [Location: Main Bus Station, 456 Transit Ave, City] [Coordinates: 40.7130, -74.0062]
+09:00 - Activity - 25 - Full details [Location: Museum Name, 789 Museum St, City] [Coordinates: 40.7132, -74.0064]
+(... complete day schedule ...)
+22:00 - Return to Hotel - 10 - Transport details [Location: Hotel Name, 101 Hotel Blvd, City] [Coordinates: 40.7134, -74.0066]
 
 Required for EACH day:
 - Breakfast (07:00-08:30)
@@ -168,16 +177,10 @@ Required for EACH day:
 - Return to hotel
 - ALL transit times
 - ALL costs (numbers only, NO dollar signs)
+- ALL locations with exact addresses
+- ALL coordinates for each location
 
-Example of REQUIRED format:
-Day {start_day} - [Date]
-07:00 - Breakfast at Morning Cafe - 15 - Local specialties
-08:30 - Transit to Location - 3 - Bus details
-09:00 - Activity - 25 - Full details
-(... complete day schedule ...)
-22:00 - Return to Hotel - 10 - Transport details
-
-CRITICAL: Your response must contain EXACTLY {end_day - start_day + 1} days of detailed schedules."""
+CRITICAL: Your response must contain EXACTLY {end_day - start_day + 1} days of detailed schedules with exact locations, addresses, and coordinates."""
 
                     response = model.generate_content(chunk_prompt)
                     if response.text:
@@ -247,20 +250,50 @@ def view_itinerary(request, pk):
         for day in generated_days:
             day_number = int(day['day_number'])
             for order, activity_data in enumerate(day['activities'], 1):
-                Activity.objects.create(itinerary=itinerary,
+                activity = Activity.objects.create(itinerary=itinerary,
                                         day_number=day_number,
                                         time=activity_data['time'],
                                         activity=activity_data['activity'],
                                         description=activity_data.get(
                                             'description', ''),
                                         cost=activity_data.get('cost', ''),
+                                        location=activity_data.get('location', ''),
                                         order=order)
+                
+                 # Save coordinates if available
+                if activity_data.get('coordinates'):
+                    activity.latitude = activity_data['coordinates']['latitude']
+                    activity.longitude = activity_data['coordinates']['longitude']
+                    activity.save()
+
+                # If we have a location but no coordinates, try to geocode it
+                elif activity.location:
+                    try:
+                        # Use Mapbox Geocoding API to get coordinates
+                        geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{activity.location}.json"
+                        params = {
+                            'access_token': settings.MAPBOX_ACCESS_TOKEN,
+                            'types': 'poi,address',
+                            'limit': 1
+                        }
+
+                        response = requests.get(geocode_url, params=params)
+                        if response.status_code == 200:
+                            data = response.json()
+                            if data['features']:
+                                coordinates = data['features'][0]['center']
+                                activity.longitude = coordinates[0]
+                                activity.latitude = coordinates[1]
+                                activity.save()
+                    except Exception as e:
+                        print(f"Error geocoding location: {e}")
         # Refresh the activities after creating them
         return redirect('view_itinerary', pk=pk)
 
     return render(request, 'users/view_itinerary.html', {
         'itinerary': itinerary,
-        'days': days_list
+        'days': days_list,
+        'mapbox_access_token': settings.MAPBOX_ACCESS_TOKEN
     })
 
 
@@ -313,6 +346,7 @@ def add_activity(request, pk):
                                            description=data.get(
                                                'description', ''),
                                            cost=data.get('cost', ''),
+                                           location=data.get('location', ''),
                                            order=order)
 
         return JsonResponse({
@@ -381,6 +415,7 @@ def edit_activity(request, pk, activity_id):
         activity.activity = data['activity']
         activity.description = data.get('description', '')
         activity.cost = data.get('cost', '')
+        activity.location = data.get('location', '')
         activity.save()
 
         return JsonResponse({
@@ -530,3 +565,118 @@ class LoggedInPasswordResetView(auth_views.PasswordResetView):
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
         return form
+    
+@login_required
+def map_view(request):
+    itinerary_id = request.GET.get('itinerary_id')
+    day_number = request.GET.get('day')
+
+    context = {
+        'mapbox_access_token': settings.MAPBOX_ACCESS_TOKEN,
+        'itinerary_id': itinerary_id,
+        'day_number': day_number,
+        'destination': {
+            'name': 'Unknown',
+            'coordinates': {
+                'lng': 0,
+                'lat': 0
+            }
+        },
+        'activities': []
+    }
+
+    if itinerary_id and day_number:
+        try:
+            itinerary = Itinerary.objects.get(id=itinerary_id, user=request.user)
+            activities = Activity.objects.filter(
+                itinerary=itinerary,
+                day_number=day_number
+            ).order_by('time')
+
+            # Get destination coordinates using Mapbox Geocoding API
+            geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{itinerary.destination}.json"
+            params = {
+                'access_token': settings.MAPBOX_ACCESS_TOKEN,
+                'types': 'place',
+                'limit': 1
+            }
+
+            response = requests.get(geocode_url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if data['features']:
+                    coordinates = data['features'][0]['center']
+                    context['destination'] = {
+                        'name': itinerary.destination,
+                        'coordinates': {
+                            'lng': coordinates[0],
+                            'lat': coordinates[1]
+                        }
+                    }
+                else:
+                    context['destination'] = {
+                        'name': itinerary.destination,
+                        'coordinates': {
+                            'lng': 0,
+                            'lat': 0
+                        }
+                    }
+            else:
+                context['destination'] = {
+                    'name': itinerary.destination,
+                    'coordinates': {
+                        'lng': 0,
+                        'lat': 0
+                    }
+                }
+
+            # Process activities and geocode their locations if needed
+            processed_activities = []
+            for activity in activities:
+                activity_data = {
+                    'id': activity.id,
+                    'time': activity.time,
+                    'activity': activity.activity,
+                    'description': activity.description,
+                    'location': 'null'  # Use string 'null' instead of Python None
+                }
+
+                # If activity has coordinates, use them
+                if activity.latitude and activity.longitude:
+                    activity_data['location'] = f"{activity.longitude},{activity.latitude}"
+                # If activity has a location string, try to geocode it
+                elif activity.location:
+                    try:
+                        coords = activity.location.split(',')
+                        if len(coords) == 2:
+                            activity_data['location'] = activity.location
+                    except:
+                        pass
+
+                # If still no location, try to geocode the activity name
+                if activity_data['location'] == 'null':
+                    search_query = f"{activity.activity}, {itinerary.destination}"
+                    geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{search_query}.json"
+                    params = {
+                        'access_token': settings.MAPBOX_ACCESS_TOKEN,
+                        'types': 'poi,address',
+                        'limit': 1
+                    }
+
+                    response = requests.get(geocode_url, params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data['features']:
+                            coordinates = data['features'][0]['center']
+                            activity_data['location'] = f"{coordinates[0]},{coordinates[1]}"
+
+                processed_activities.append(activity_data)
+
+            context['activities'] = processed_activities
+
+        except Itinerary.DoesNotExist:
+            pass
+        except Exception as e:
+            print(f"Error in map_view: {str(e)}")
+
+    return render(request, 'map.html', context)

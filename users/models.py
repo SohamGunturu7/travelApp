@@ -59,7 +59,11 @@ class Itinerary(models.Model):
         
         for line in self.generated_plan.split('\n'):
             # Check for a new day header
-            day_match = re.match(r'^Day\s+(\d+)\s*-?\s*(.*?)$', line.strip())
+            line = line.strip()
+            if not line:
+                continue
+
+            day_match = re.match(r'^Day\s+(\d+)(?:\s*-\s*(.*?))?$', line)
             
             if day_match:
                 # Save the previous day if it exists
@@ -72,7 +76,7 @@ class Itinerary(models.Model):
                 
                 # Start a new day
                 day_number = day_match.group(1)
-                day_title = day_match.group(2).strip()
+                day_title = day_match.group(2).strip() if day_match.group(2) else ""
                 current_day = {
                     'day_number': day_number,
                     'day_title': day_title
@@ -80,25 +84,51 @@ class Itinerary(models.Model):
                 current_activities = []
             elif current_day is not None:
                 # Check for activity lines (usually start with a time)
-                time_match = re.match(r'^(\d{1,2}:\d{2})\s*-\s*(.*?)(?:\s*-\s*(.*))?$', line.strip())
+                time_match = re.match(r'^(\d{1,2}:\d{2})\s*-\s*(.*?)(?:\s*-\s*(.*))?$', line)
                 
                 if time_match:
                     time = time_match.group(1)
                     activity = time_match.group(2).strip()
                     details = time_match.group(3).strip() if time_match.group(3) else ""
                     
-                    # Check if details contain cost and description
-                    cost_details = details.split(' - ', 1) if ' - ' in details else [details, ""]
-                    cost = cost_details[0] if len(cost_details) > 0 else ""
-                    description = cost_details[1] if len(cost_details) > 1 else ""
+                # Extract location information if present
+                    location = None
+                    location_match = re.search(r'\[Location:\s*(.*?)\]', details)
+                    if location_match:
+                        location = location_match.group(1).strip()
+                        # Remove location from details
+                        details = re.sub(r'\[Location:.*?\]', '', details).strip()
+
+                    # Extract coordinates if present
+                    coordinates = None
+                    coords_match = re.search(r'\[Coordinates:\s*([-\d.]+),\s*([-\d.]+)\]', details)
+                    if coords_match:
+                        try:
+                            latitude = float(coords_match.group(1))
+                            longitude = float(coords_match.group(2))
+                            coordinates = {
+                                'latitude': latitude,
+                                'longitude': longitude
+                            }
+                        except ValueError:
+                            coordinates = None
+                        # Remove coordinates from details
+                        details = re.sub(r'\[Coordinates:.*?\]', '', details).strip()
+
+                    # Split details into cost and description
+                    parts = details.split(' - ', 1)
+                    cost = parts[0].strip() if parts else ""
+                    description = parts[1].strip() if len(parts) > 1 else ""
                     
                     current_activities.append({
                         'time': time,
                         'activity': activity,
                         'cost': cost,
-                        'description': description
+                        'description': description,
+                        'location': location,
+                        'coordinates': coordinates
                     })
-                elif line.strip() and current_activities:
+                elif line and current_activities:
                     # Append to the previous activity's description if it's a continuation
                     current_activities[-1]['description'] += " " + line.strip()
         
@@ -120,6 +150,10 @@ class Activity(models.Model):
     description = models.TextField(blank=True)
     cost = models.CharField(max_length=50, blank=True)
     order = models.PositiveIntegerField()
+    location = models.CharField(max_length=200, blank=True, null=True)  # Human-readable address
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)  # Store coordinates as "longitude,latitude"
+
 
     class Meta:
         ordering = ['day_number', 'order', 'time']
@@ -127,3 +161,30 @@ class Activity(models.Model):
 
     def __str__(self):
         return f"Day {self.day_number} - {self.time} - {self.activity}"
+    
+    def save(self, *args, **kwargs):
+            # If location is provided but coordinates aren't, try to geocode
+            if self.location and not (self.latitude and self.longitude):
+                try:
+                    from django.conf import settings
+                    import requests
+
+                    # Use Mapbox Geocoding API to get coordinates
+                    geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{self.location}.json"
+                    params = {
+                        'access_token': settings.MAPBOX_ACCESS_TOKEN,
+                        'types': 'poi,address',
+                        'limit': 1
+                    }
+
+                    response = requests.get(geocode_url, params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data['features']:
+                            coordinates = data['features'][0]['center']
+                            self.longitude = coordinates[0]
+                            self.latitude = coordinates[1]
+                except Exception as e:
+                    print(f"Error geocoding location: {e}")
+
+            super().save(*args, **kwargs)

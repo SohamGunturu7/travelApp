@@ -1,0 +1,240 @@
+{% extends 'users/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <h2>{{ itinerary.title }}</h2>
+            <p class="text-muted">{{ itinerary.destination }} | {{ itinerary.duration }} days</p>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Travel Preferences</h5>
+                    <p class="card-text">
+                        <strong>Budget:</strong> {{ itinerary.budget }}<br>
+                        <strong>Interests:</strong> {{ itinerary.interests }}<br>
+                        <strong>Accommodation:</strong> {{ itinerary.accommodation }}<br>
+                        <strong>Transportation:</strong> {{ itinerary.transportation }}
+                    </p>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Generated Itinerary</h5>
+                    <div class="itinerary-content">
+                        {% for day in itinerary.days_itinerary %}
+                        <div class="day-section mb-4">
+                            <h4>Day {{ day.day_number }}{% if day.day_title %}: {{ day.day_title }}{% endif %}</h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="activities-list">
+                                        {% for activity in day.activities %}
+                                        <div class="activity-item mb-3">
+                                            <div class="d-flex justify-content-between">
+                                                <h6 class="mb-1">{{ activity.time }} - {{ activity.activity }}</h6>
+                                                {% if activity.cost %}
+                                                <span class="badge bg-primary">{{ activity.cost }}</span>
+                                                {% endif %}
+                                            </div>
+                                            {% if activity.location %}
+                                            <p class="mb-1">
+                                                <i class="fas fa-map-marker-alt"></i> {{ activity.location }}
+                                                {% if activity.latitude and activity.longitude %}
+                                                <small class="text-muted">
+                                                    ({{ activity.latitude }}, {{ activity.longitude }})
+                                                </small>
+                                                {% endif %}
+                                            </p>
+                                            {% endif %}
+                                            {% if activity.description %}
+                                            <p class="mb-0">{{ activity.description }}</p>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="map-container" style="height: 300px;">
+                                        <div id="map-day-{{ day.day_number }}" class="map"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Actions</h5>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'users:itinerary_update' itinerary.id %}" class="btn btn-primary">
+                            <i class="fas fa-edit"></i> Edit Itinerary
+                        </a>
+                        <a href="{% url 'users:itinerary_delete' itinerary.id %}" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> Delete Itinerary
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+<link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    mapboxgl.accessToken = '{{ mapbox_access_token }}';
+    
+    {% for day in itinerary.days_itinerary %}
+    // Initialize map for day {{ day.day_number }}
+    const map{{ day.day_number }} = new mapboxgl.Map({
+        container: 'map-day-{{ day.day_number }}',
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [0, 0], // Default center, will be updated
+        zoom: 12
+    });
+    
+    // Add navigation controls
+    map{{ day.day_number }}.addControl(new mapboxgl.NavigationControl());
+    
+    // Add geolocation control
+    map{{ day.day_number }}.addControl(
+        new mapboxgl.GeolocateControl({
+            positionOptions: {
+                enableHighAccuracy: true
+            },
+            trackUserLocation: true,
+            showUserHeading: true
+        })
+    );
+    
+    // Create a GeoJSON source for markers
+    const markers{{ day.day_number }} = {
+        type: 'FeatureCollection',
+        features: []
+    };
+    
+    // Create a GeoJSON source for the route
+    const route{{ day.day_number }} = {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+            type: 'LineString',
+            coordinates: []
+        }
+    };
+    
+    {% for activity in day.activities %}
+    {% if activity.latitude and activity.longitude %}
+    // Add marker for activity
+    markers{{ day.day_number }}.features.push({
+        type: 'Feature',
+        properties: {
+            title: '{{ activity.activity }}',
+            description: '{{ activity.time }}',
+            order: {{ forloop.counter }}
+        },
+        geometry: {
+            type: 'Point',
+            coordinates: [{{ activity.longitude }}, {{ activity.latitude }}]
+        }
+    });
+    
+    // Add point to route
+    route{{ day.day_number }}.geometry.coordinates.push([{{ activity.longitude }}, {{ activity.latitude }}]);
+    {% endif %}
+    {% endfor %}
+    
+    // Wait for the map to load
+    map{{ day.day_number }}.on('load', function() {
+        // Add markers source and layer
+        map{{ day.day_number }}.addSource('markers{{ day.day_number }}', {
+            type: 'geojson',
+            data: markers{{ day.day_number }}
+        });
+        
+        map{{ day.day_number }}.addLayer({
+            id: 'markers{{ day.day_number }}',
+            type: 'symbol',
+            source: 'markers{{ day.day_number }}',
+            layout: {
+                'text-field': ['get', 'order'],
+                'text-size': 12,
+                'text-offset': [0, 1.25],
+                'icon-image': 'marker-15',
+                'icon-size': 1.5
+            }
+        });
+        
+        // Add route source and layer
+        map{{ day.day_number }}.addSource('route{{ day.day_number }}', {
+            type: 'geojson',
+            data: route{{ day.day_number }}
+        });
+        
+        map{{ day.day_number }}.addLayer({
+            id: 'route{{ day.day_number }}',
+            type: 'line',
+            source: 'route{{ day.day_number }}',
+            layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            paint: {
+                'line-color': '#3b82f6',
+                'line-width': 3
+            }
+        });
+        
+        // Add popups to markers
+        map{{ day.day_number }}.on('click', 'markers{{ day.day_number }}', function(e) {
+            const coordinates = e.features[0].geometry.coordinates.slice();
+            const properties = e.features[0].properties;
+            
+            while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+            }
+            
+            new mapboxgl.Popup()
+                .setLngLat(coordinates)
+                .setHTML(`
+                    <h6>${properties.title}</h6>
+                    <p class="mb-0">${properties.description}</p>
+                `)
+                .addTo(map{{ day.day_number }});
+        });
+        
+        // Change cursor to pointer when hovering over markers
+        map{{ day.day_number }}.on('mouseenter', 'markers{{ day.day_number }}', function() {
+            map{{ day.day_number }}.getCanvas().style.cursor = 'pointer';
+        });
+        
+        map{{ day.day_number }}.on('mouseleave', 'markers{{ day.day_number }}', function() {
+            map{{ day.day_number }}.getCanvas().style.cursor = '';
+        });
+        
+        // Fit map to show all markers and route
+        if (markers{{ day.day_number }}.features.length > 0) {
+            const bounds = new mapboxgl.LngLatBounds();
+            markers{{ day.day_number }}.features.forEach(function(feature) {
+                bounds.extend(feature.geometry.coordinates);
+            });
+            map{{ day.day_number }}.fitBounds(bounds, {
+                padding: 50
+            });
+        }
+    });
+    {% endfor %}
+});
+</script>
+{% endblock %}
+{% endblock %} 

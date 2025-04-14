@@ -134,3 +134,4 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'gttravelplanner@gmail.com'
 EMAIL_HOST_PASSWORD = 'yxwczupspsyhbkse'
+MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoidmF0c2FsZCIsImEiOiJjbTlhaG9hMzYwNTl2MmpwdnQ2OXE0eDE1In0.2mjPHrIO9jNCWF_zPGcRSg'
