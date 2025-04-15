@@ -25,7 +25,12 @@ urlpatterns = [
     path('itinerary/<int:pk>/recommendations/',
          views.get_recommendations,
          name='get_recommendations'),
-    path('itinerary/<int:pk>/hidden-gems/', views.get_hidden_gems, name='get_hidden_gems'),
+    path('itinerary/<int:pk>/hidden-gems/',
+         views.get_hidden_gems,
+         name='get_hidden_gems'),
+    path('itinerary/<int:pk>/tips-safety/',
+         views.get_tips_safety,
+         name='tips_safety'),
 
     # Password reset views:
     path('password_reset/',
@@ -53,6 +58,7 @@ urlpatterns = [
          auth_views.PasswordResetCompleteView.as_view(
              template_name='users/password_reset_complete.html'),
          name='password_reset_complete'),
-     path('itinerary/<int:pk>/packing-checklist/', 
-          views.packing_checklist, name='packing_checklist'),
+    path('itinerary/<int:pk>/packing-checklist/',
+         views.packing_checklist,
+         name='packing_checklist'),
 ]
