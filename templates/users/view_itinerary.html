@@ -127,6 +127,34 @@
         </div>
     </div>
 
+  <!-- Tips & Safety Section -->
+  <div class="card border-0 shadow-lg rounded-3 mb-4">
+      <div class="card-body p-4">
+          <div class="d-flex justify-content-between align-items-center">
+              <h2 class="h4 mb-0">
+                  <i class="fas fa-exclamation-triangle me-2 text-primary"></i>
+                  Tips & Safety
+              </h2>
+              <button class="btn btn-primary" id="loadTipsSafety">
+                  <i class="fas fa-sync me-2"></i>Get Tips & Safety
+              </button>
+          </div>
+          
+          <!-- Tips & Safety content -->
+          <div id="tipsSafetyContent" class="mt-4" style="display: none;">
+              <div id="tipsSafetyOutput"></div>
+          </div>
+          
+          <!-- Loading spinner -->
+          <div id="tipsSafetyLoading" class="text-center py-5" style="display: none;">
+              <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+              </div>
+              <p class="mt-3 text-muted">Generating travel tips and safety recommendations...</p>
+          </div>
+      </div>
+  </div>
+
     <!-- Day Navigation -->
     <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -642,6 +670,7 @@
             });
         });
 
+        // Recommendations functionality
         const loadBtn = document.getElementById('loadRecommendations');
         const content = document.getElementById('recommendationsContent');
         const loading = document.getElementById('recommendationsLoading');
@@ -718,6 +747,7 @@
             }
         });
 
+        // Hidden Gems functionality
         const loadGemsBtn = document.getElementById('loadHiddenGems');
         const gemsContent = document.getElementById('hiddenGemsContent');
         const gemsLoading = document.getElementById('hiddenGemsLoading');
@@ -811,6 +841,75 @@
                 loadGemsBtn.disabled = false;
             }
         });
+
+        // Tips & Safety functionality (similar to Recommendations and Hidden Gems)
+        const loadTipsSafetyBtn = document.getElementById('loadTipsSafety');
+        const tipsSafetyContent = document.getElementById('tipsSafetyContent');
+        const tipsSafetyLoading = document.getElementById('tipsSafetyLoading');
+        const tipsSafetyOutput = document.getElementById('tipsSafetyOutput');
+
+        loadTipsSafetyBtn.addEventListener('click', async function() {
+            try {
+                // Hide previous content and show the loader
+                tipsSafetyContent.style.display = 'none';
+                tipsSafetyOutput.innerHTML = ''; // Clear previous output
+                tipsSafetyLoading.style.display = 'block';
+                loadTipsSafetyBtn.disabled = true;
+                
+                // Fetch tips & safety data from the backend endpoint
+                const response = await fetch(`/itinerary/${itineraryId}/tips-safety/`, {
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load tips and safety information');
+                
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                
+                let htmlContent = '';
+                if (data.general_travel_tips && data.general_travel_tips.length) {
+                    htmlContent += `<h4 class="mb-3"><i class="fas fa-lightbulb me-2 text-primary"></i>General Travel Tips</h4>`;
+                    data.general_travel_tips.forEach(item => {
+                        htmlContent += `
+                        <div class="mb-3 border-bottom pb-2">
+                            <div class="d-flex align-items-center">
+                                <i class="fas ${item.icon} fa-lg me-2 text-secondary"></i>
+                                <strong>${item.title}</strong>
+                            </div>
+                            <p class="ms-4 mb-0">${item.description}</p>
+                        </div>`;
+                    });
+                }
+                
+                if (data.safety_recommendations && data.safety_recommendations.length) {
+                    htmlContent += `<h4 class="mt-4 mb-3"><i class="fas fa-shield-alt me-2 text-primary"></i>Safety Recommendations</h4>`;
+                    data.safety_recommendations.forEach(item => {
+                        htmlContent += `
+                        <div class="mb-3 border-bottom pb-2">
+                            <div class="d-flex align-items-center">
+                                <i class="fas ${item.icon} fa-lg me-2 text-secondary"></i>
+                                <strong>${item.title}</strong>
+                            </div>
+                            <p class="ms-4 mb-0">${item.description}</p>
+                        </div>`;
+                    });
+                }
+                
+                tipsSafetyOutput.innerHTML = htmlContent;
+                
+                // Hide the loader and show the content
+                tipsSafetyLoading.style.display = 'none';
+                tipsSafetyContent.style.display = 'block';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error loading tips and safety information. Please try again.');
+            } finally {
+                loadTipsSafetyBtn.disabled = false;
+            }
+        });
     });
 </script>
 {% endblock %}
+

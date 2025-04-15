@@ -309,35 +309,69 @@ def get_tips_safety(request, pk):
             "temperature": 0.7,
             "top_p": 1,
             "top_k": 1,
-            "max_output_tokens": 1000,
+            "max_output_tokens": 1500,  # Adjust token count as needed
         }
         model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
                                       generation_config=generation_config)
 
+        # Build a prompt that instructs for structured JSON output with icons
         prompt = f"""
-Based on the following trip details, generate general travel tips and safety guidelines for traveling to {itinerary.destination}. Use the itinerary information to tailor your advice. 
-
+You are a travel expert. Based on the following trip details, provide general travel tips and safety recommendations in valid JSON format. Use appropriate Font Awesome icon classes for each tip item.
 Trip Details:
-- Trip Duration: {itinerary.duration_days} days
+- Destination: {itinerary.destination}
+- Duration: {itinerary.duration_days} days
 - Dates: {itinerary.start_date} to {itinerary.end_date}
-- Daily Budget: {itinerary.budget / itinerary.duration_days:.2f} (numbers only)
+- Daily Budget (numbers only): {itinerary.budget / itinerary.duration_days:.2f}
 - Number of People: {itinerary.number_of_people}
 - Interests: {', '.join(itinerary.interests)}
 - Preferred Pace: {itinerary.preferred_pace}
 
-Provide your answer with two clear sections:
-1. General Travel Tips (e.g., packing, local customs, must-see tips)
-2. Safety Recommendations (e.g., staying aware, handling emergencies, local safety tips)
+Please respond in valid JSON with the following structure exactly:
+{{
+  "general_travel_tips": [
+    {{
+      "icon": "string (e.g., 'fa-suitcase', 'fa-plane')",
+      "title": "string",
+      "description": "string"
+    }}
+    // provide at least 3 items
+  ],
+  "safety_recommendations": [
+    {{
+      "icon": "string (e.g., 'fa-shield-alt', 'fa-exclamation-triangle')",
+      "title": "string",
+      "description": "string"
+    }}
+    // provide at least 3 items
+  ]
+}}
 
-Format your response with headings "General Travel Tips:" and "Safety Recommendations:" followed by bullet points under each section.
+Make sure the JSON is valid and contains no additional text.
 """
 
-        # Generate the response using your generative AI model
         response = model.generate_content(prompt)
-        if response.text:
-            return JsonResponse({'tips_safety': response.text})
-        else:
-            return JsonResponse({'error': 'No response generated'}, status=500)
+        if not response.text:
+            raise ValueError("No response received from the AI model")
+
+        # Attempt to parse the generated response as JSON
+        try:
+            tips_data = json.loads(response.text)
+        except json.JSONDecodeError:
+            # Sometimes the model returns extra text; try to extract the JSON using a regex
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response.text)
+            if json_match:
+                tips_data = json.loads(json_match.group(0))
+            else:
+                raise ValueError("The AI response did not contain valid JSON.")
+
+        # Validate basic structure
+        if (not isinstance(tips_data, dict)
+                or "general_travel_tips" not in tips_data
+                or "safety_recommendations" not in tips_data):
+            raise ValueError("Missing required sections in response JSON.")
+
+        return JsonResponse(tips_data)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
