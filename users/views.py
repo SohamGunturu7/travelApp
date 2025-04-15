@@ -4,9 +4,9 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django import forms
-from .forms import UserRegisterForm, ItineraryForm, UserUpdateForm
+from .forms import UserRegisterForm, ItineraryForm, UserUpdateForm, PackingChecklistForm
 from django.urls import reverse_lazy
-from .models import Itinerary, Activity
+from .models import Itinerary, Activity, PackingChecklist
 import google.generativeai as genai
 import json
 from django.http import JsonResponse
@@ -14,6 +14,8 @@ from django.views.decorators.http import require_http_methods
 from django.db import models
 from django.conf import settings
 import requests
+from django.views.decorators.http import require_POST
+from django.utils.timezone import now
 
 
 # Configure Gemini API
@@ -762,3 +764,101 @@ Ensure recommendations are:
         return JsonResponse({
             'error': f'Error finding hidden gems: {str(e)}'
         }, status=500)
+
+@login_required
+def packing_checklist(request, pk):
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+
+    if request.method == 'POST' and 'regenerate' in request.POST:
+        try:
+            # Configure Gemini API
+            genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+            
+            generation_config = {
+                "temperature": 0.9,
+                "top_p": 1,
+                "top_k": 1,
+                "max_output_tokens": 2048,
+            }
+
+            model = genai.GenerativeModel(
+                model_name="models/gemini-1.5-pro",
+                generation_config=generation_config
+            )
+
+            # Create prompt
+            prompt = f"""Create a detailed packing list for {itinerary.duration_days} days in {itinerary.destination}.
+            
+            Format each section exactly like this:
+            
+            CLOTHING:
+            - 5 t-shirts
+            - 3 pairs of pants
+            
+            TOILETRIES:
+            - Toothbrush and toothpaste
+            - Shampoo and conditioner
+            
+            ELECTRONICS:
+            - Phone charger
+            - Camera
+            
+            DOCUMENTS:
+            - Passport
+            - Travel insurance
+            
+            Be specific about quantities and include items based on:
+            - Duration: {itinerary.duration_days} days
+            - Destination: {itinerary.destination}
+            - Activities: {', '.join(itinerary.interests)}"""
+
+            # Get response
+            response = model.generate_content(prompt)
+            print("Raw response:", response.text)  # Debug print
+            
+            # Process sections
+            sections = {
+                'CLOTHING': [],
+                'TOILETRIES': [],
+                'ELECTRONICS': [],
+                'DOCUMENTS': []
+            }
+            
+            current_section = None
+            
+            # Parse response
+            for line in response.text.split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                    
+                # Check for section headers
+                if line.endswith(':'):
+                    current_section = line.rstrip(':').upper()
+                    continue
+                    
+                # Add items to current section
+                if current_section and line.startswith('-'):
+                    item = line.lstrip('- ').strip()
+                    if item and current_section in sections:
+                        sections[current_section].append(item)
+
+            print("Processed sections:", sections)  # Debug print
+
+            # Save to database
+            checklist, created = PackingChecklist.objects.get_or_create(
+                itinerary=itinerary)
+            checklist.items = sections
+            checklist.save()
+
+            messages.success(request, "Packing checklist generated successfully!")
+
+        except Exception as e:
+            print(f"Error generating packing list: {str(e)}")  # Debug print
+            messages.error(request, f"Error: {str(e)}")
+        
+        return redirect('packing_checklist', pk=pk)
+
+    return render(request, 'users/packing_checklist.html', {
+        'itinerary': itinerary
+    })
