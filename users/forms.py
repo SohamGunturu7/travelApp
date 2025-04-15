@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import Itinerary
+from .models import Itinerary, PackingChecklist
 from datetime import date
 
 
@@ -79,4 +79,17 @@ class ItineraryForm(forms.ModelForm):
                     "Trip duration cannot exceed 30 days")
 
         return cleaned_data
+class PackingChecklistForm(forms.ModelForm):
+    class Meta:
+        model = PackingChecklist
+        fields = ['items']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Render items as checkboxes
+        if self.instance and self.instance.items:
+            self.fields['items'] = forms.MultipleChoiceField(
+                choices=[(item, item) for item in self.instance.items],
+                widget=forms.CheckboxSelectMultiple,
+                required=False,
+            )

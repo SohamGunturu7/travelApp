@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
 from django.utils import timezone
+from django.views.decorators.http import require_POST
+from django.utils.timezone import now
 import re
 
 class Itinerary(models.Model):
@@ -188,3 +190,11 @@ class Activity(models.Model):
                     print(f"Error geocoding location: {e}")
 
             super().save(*args, **kwargs)
+
+class PackingChecklist(models.Model):
+    itinerary = models.OneToOneField(Itinerary, on_delete=models.CASCADE, related_name='packing_checklist')
+    items = models.JSONField(default=list)  # Store packing items as a list of dictionaries
+
+    def __str__(self):
+        return f"Packing Checklist for {self.itinerary.destination}"
+

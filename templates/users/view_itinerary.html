@@ -35,6 +35,10 @@
                     <a href="{% url 'home' %}" class="btn btn-outline-primary me-2">
                         <i class="fas fa-arrow-left me-2"></i>Back to Plans
                     </a>
+                    <a href="{% url 'packing_checklist' itinerary.id %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-suitcase me-2"></i>Packing Checklist
+                    </a>
+                    </div>
                     <button class="btn btn-primary" onclick="window.print()">
                         <i class="fas fa-print me-2"></i>Print
                     </button>
@@ -809,4 +813,4 @@
         });
     });
 </script>
-{% endblock %} 
+{% endblock %}
