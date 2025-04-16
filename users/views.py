@@ -17,7 +17,6 @@ import requests
 from django.views.decorators.http import require_POST
 from django.utils.timezone import now
 
-
 # Configure Gemini API
 # probably don't commit an api key to a github
 genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
@@ -252,20 +251,22 @@ def view_itinerary(request, pk):
         for day in generated_days:
             day_number = int(day['day_number'])
             for order, activity_data in enumerate(day['activities'], 1):
-                activity = Activity.objects.create(itinerary=itinerary,
-                                        day_number=day_number,
-                                        time=activity_data['time'],
-                                        activity=activity_data['activity'],
-                                        description=activity_data.get(
-                                            'description', ''),
-                                        cost=activity_data.get('cost', ''),
-                                        location=activity_data.get('location', ''),
-                                        order=order)
-                
-                 # Save coordinates if available
+                activity = Activity.objects.create(
+                    itinerary=itinerary,
+                    day_number=day_number,
+                    time=activity_data['time'],
+                    activity=activity_data['activity'],
+                    description=activity_data.get('description', ''),
+                    cost=activity_data.get('cost', ''),
+                    location=activity_data.get('location', ''),
+                    order=order)
+
+                # Save coordinates if available
                 if activity_data.get('coordinates'):
-                    activity.latitude = activity_data['coordinates']['latitude']
-                    activity.longitude = activity_data['coordinates']['longitude']
+                    activity.latitude = activity_data['coordinates'][
+                        'latitude']
+                    activity.longitude = activity_data['coordinates'][
+                        'longitude']
                     activity.save()
 
                 # If we have a location but no coordinates, try to geocode it
@@ -292,11 +293,87 @@ def view_itinerary(request, pk):
         # Refresh the activities after creating them
         return redirect('view_itinerary', pk=pk)
 
-    return render(request, 'users/view_itinerary.html', {
-        'itinerary': itinerary,
-        'days': days_list,
-        'mapbox_access_token': settings.MAPBOX_ACCESS_TOKEN
-    })
+    return render(
+        request, 'users/view_itinerary.html', {
+            'itinerary': itinerary,
+            'days': days_list,
+            'mapbox_access_token': settings.MAPBOX_ACCESS_TOKEN
+        })
+
+
+@login_required
+def get_tips_safety(request, pk):
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+    try:
+        generation_config = {
+            "temperature": 0.7,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 1500,  # Adjust token count as needed
+        }
+        model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
+                                      generation_config=generation_config)
+
+        # Build a prompt that instructs for structured JSON output with icons
+        prompt = f"""
+You are a travel expert. Based on the following trip details, provide general travel tips and safety recommendations in valid JSON format. Use appropriate Font Awesome icon classes for each tip item.
+Trip Details:
+- Destination: {itinerary.destination}
+- Duration: {itinerary.duration_days} days
+- Dates: {itinerary.start_date} to {itinerary.end_date}
+- Daily Budget (numbers only): {itinerary.budget / itinerary.duration_days:.2f}
+- Number of People: {itinerary.number_of_people}
+- Interests: {', '.join(itinerary.interests)}
+- Preferred Pace: {itinerary.preferred_pace}
+
+Please respond in valid JSON with the following structure exactly:
+{{
+  "general_travel_tips": [
+    {{
+      "icon": "string (e.g., 'fa-suitcase', 'fa-plane')",
+      "title": "string",
+      "description": "string"
+    }}
+    // provide at least 3 items
+  ],
+  "safety_recommendations": [
+    {{
+      "icon": "string (e.g., 'fa-shield-alt', 'fa-exclamation-triangle')",
+      "title": "string",
+      "description": "string"
+    }}
+    // provide at least 3 items
+  ]
+}}
+
+Make sure the JSON is valid and contains no additional text.
+"""
+
+        response = model.generate_content(prompt)
+        if not response.text:
+            raise ValueError("No response received from the AI model")
+
+        # Attempt to parse the generated response as JSON
+        try:
+            tips_data = json.loads(response.text)
+        except json.JSONDecodeError:
+            # Sometimes the model returns extra text; try to extract the JSON using a regex
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response.text)
+            if json_match:
+                tips_data = json.loads(json_match.group(0))
+            else:
+                raise ValueError("The AI response did not contain valid JSON.")
+
+        # Validate basic structure
+        if (not isinstance(tips_data, dict)
+                or "general_travel_tips" not in tips_data
+                or "safety_recommendations" not in tips_data):
+            raise ValueError("Missing required sections in response JSON.")
+
+        return JsonResponse(tips_data)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @login_required
@@ -567,7 +644,8 @@ class LoggedInPasswordResetView(auth_views.PasswordResetView):
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
         return form
-    
+
+
 @login_required
 def map_view(request):
     itinerary_id = request.GET.get('itinerary_id')
@@ -589,11 +667,10 @@ def map_view(request):
 
     if itinerary_id and day_number:
         try:
-            itinerary = Itinerary.objects.get(id=itinerary_id, user=request.user)
+            itinerary = Itinerary.objects.get(id=itinerary_id,
+                                              user=request.user)
             activities = Activity.objects.filter(
-                itinerary=itinerary,
-                day_number=day_number
-            ).order_by('time')
+                itinerary=itinerary, day_number=day_number).order_by('time')
 
             # Get destination coordinates using Mapbox Geocoding API
             geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{itinerary.destination}.json"
@@ -640,12 +717,14 @@ def map_view(request):
                     'time': activity.time,
                     'activity': activity.activity,
                     'description': activity.description,
-                    'location': 'null'  # Use string 'null' instead of Python None
+                    'location':
+                    'null'  # Use string 'null' instead of Python None
                 }
 
                 # If activity has coordinates, use them
                 if activity.latitude and activity.longitude:
-                    activity_data['location'] = f"{activity.longitude},{activity.latitude}"
+                    activity_data[
+                        'location'] = f"{activity.longitude},{activity.latitude}"
                 # If activity has a location string, try to geocode it
                 elif activity.location:
                     try:
@@ -670,7 +749,8 @@ def map_view(request):
                         data = response.json()
                         if data['features']:
                             coordinates = data['features'][0]['center']
-                            activity_data['location'] = f"{coordinates[0]},{coordinates[1]}"
+                            activity_data[
+                                'location'] = f"{coordinates[0]},{coordinates[1]}"
 
                 processed_activities.append(activity_data)
 
@@ -687,11 +767,11 @@ def map_view(request):
 @login_required
 def get_hidden_gems(request, pk):
     itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
-    
+
     try:
         # Configure Gemini API
         genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
-        
+
         generation_config = {
             "temperature": 0.9,
             "top_p": 1,
@@ -699,10 +779,8 @@ def get_hidden_gems(request, pk):
             "max_output_tokens": 2048,
         }
 
-        model = genai.GenerativeModel(
-            model_name="models/gemini-1.5-pro",
-            generation_config=generation_config
-        )
+        model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
+                                      generation_config=generation_config)
 
         prompt = f"""As a local expert in {itinerary.destination}, recommend 5 hidden gems and unique experiences that most tourists miss. Consider these user interests: {', '.join(itinerary.interests)}.
 
@@ -742,7 +820,7 @@ Ensure recommendations are:
 """
 
         response = model.generate_content(prompt)
-        
+
         if not response.text:
             raise ValueError("No response received from the AI model")
 
@@ -758,12 +836,12 @@ Ensure recommendations are:
                 return JsonResponse(recommendations)
             else:
                 raise ValueError("Invalid JSON format in response")
-                
+
     except Exception as e:
         print(f"Error generating hidden gems: {str(e)}")
-        return JsonResponse({
-            'error': f'Error finding hidden gems: {str(e)}'
-        }, status=500)
+        return JsonResponse({'error': f'Error finding hidden gems: {str(e)}'},
+                            status=500)
+
 
 @login_required
 def packing_checklist(request, pk):
@@ -773,7 +851,7 @@ def packing_checklist(request, pk):
         try:
             # Configure Gemini API
             genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
-            
+
             generation_config = {
                 "temperature": 0.9,
                 "top_p": 1,
@@ -781,10 +859,8 @@ def packing_checklist(request, pk):
                 "max_output_tokens": 2048,
             }
 
-            model = genai.GenerativeModel(
-                model_name="models/gemini-1.5-pro",
-                generation_config=generation_config
-            )
+            model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
+                                          generation_config=generation_config)
 
             # Create prompt
             prompt = f"""Create a detailed packing list for {itinerary.duration_days} days in {itinerary.destination}.
@@ -815,7 +891,7 @@ def packing_checklist(request, pk):
             # Get response
             response = model.generate_content(prompt)
             print("Raw response:", response.text)  # Debug print
-            
+
             # Process sections
             sections = {
                 'CLOTHING': [],
@@ -823,20 +899,20 @@ def packing_checklist(request, pk):
                 'ELECTRONICS': [],
                 'DOCUMENTS': []
             }
-            
+
             current_section = None
-            
+
             # Parse response
             for line in response.text.split('\n'):
                 line = line.strip()
                 if not line:
                     continue
-                    
+
                 # Check for section headers
                 if line.endswith(':'):
                     current_section = line.rstrip(':').upper()
                     continue
-                    
+
                 # Add items to current section
                 if current_section and line.startswith('-'):
                     item = line.lstrip('- ').strip()
@@ -851,14 +927,15 @@ def packing_checklist(request, pk):
             checklist.items = sections
             checklist.save()
 
-            messages.success(request, "Packing checklist generated successfully!")
+            messages.success(request,
+                             "Packing checklist generated successfully!")
 
         except Exception as e:
             print(f"Error generating packing list: {str(e)}")  # Debug print
             messages.error(request, f"Error: {str(e)}")
-        
+
         return redirect('packing_checklist', pk=pk)
 
-    return render(request, 'users/packing_checklist.html', {
-        'itinerary': itinerary
-    })
+    return render(request, 'users/packing_checklist.html',
+                  {'itinerary': itinerary})
+
