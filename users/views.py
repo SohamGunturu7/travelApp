@@ -1014,3 +1014,191 @@ def get_weather(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+
+@login_required
+def get_restaurant_recommendations(request, pk):
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+
+    try:
+        # Configure the model
+        generation_config = {
+            "temperature": 0.9,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 2048,
+        }
+
+        # Configure Gemini API
+        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+
+        model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
+                                      generation_config=generation_config)
+
+        # Create prompt for restaurant recommendations
+        prompt = f"""You are a travel expert. Given the following travel details, recommend real and accurate restaurants that fit within the budget. Make sure to keep the recommendations realistic and within the specified budget constraints.
+
+Destination: {itinerary.destination}
+Total Budget: ${itinerary.budget} for {itinerary.duration_days} days
+Daily Budget: ${float(itinerary.budget) / itinerary.duration_days:.2f}
+Number of People: {itinerary.number_of_people}
+Duration: {itinerary.duration_days} days
+Interests: {', '.join(itinerary.interests)}
+
+Please provide recommendations in the following JSON format exactly:
+{{
+    "restaurants": [
+        {{
+            "name": "string",
+            "cuisine": "string",
+            "price_range": "string (in $ format)",
+            "description": "string",
+            "match_reason": "string"
+        }}
+    ]
+}}
+
+Important:
+- Provide 5 restaurant recommendations
+- Ensure prices are realistic and within budget
+- Focus on options that match the user's interests
+- Only return valid JSON format
+"""
+
+        # Generate recommendations
+        response = model.generate_content(prompt)
+
+        if not response.text:
+            raise ValueError("No response received from the AI model")
+
+        try:
+            # Try to parse the response as JSON
+            recommendations = json.loads(response.text)
+
+            # Validate the structure
+            if not isinstance(recommendations, dict):
+                raise ValueError("Response is not a dictionary")
+            if "restaurants" not in recommendations:
+                raise ValueError("Missing restaurants section in response")
+            if not isinstance(recommendations["restaurants"], list):
+                raise ValueError("Restaurants are not in list format")
+
+            return JsonResponse(recommendations)
+
+        except json.JSONDecodeError as e:
+            # If JSON parsing fails, try to extract JSON from the response
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response.text)
+            if json_match:
+                try:
+                    recommendations = json.loads(json_match.group(0))
+                    return JsonResponse(recommendations)
+                except json.JSONDecodeError:
+                    raise ValueError(
+                        f"Could not parse JSON from response: {response.text[:200]}"
+                    )
+            else:
+                raise ValueError(
+                    f"Invalid JSON format in response: {response.text[:200]}")
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error generating restaurant recommendations: {str(e)}\n{error_details}")
+        return JsonResponse(
+            {'error': f'Error generating restaurant recommendations: {str(e)}'},
+            status=500)
+
+
+@login_required
+def get_hotel_recommendations(request, pk):
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+
+    try:
+        # Configure the model
+        generation_config = {
+            "temperature": 0.9,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 2048,
+        }
+
+        # Configure Gemini API
+        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+
+        model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
+                                      generation_config=generation_config)
+
+        # Create prompt for hotel recommendations
+        prompt = f"""You are a travel expert. Given the following travel details, recommend real and accurate hotels that fit within the budget. Make sure to keep the recommendations realistic and within the specified budget constraints.
+
+Destination: {itinerary.destination}
+Total Budget: ${itinerary.budget} for {itinerary.duration_days} days
+Daily Budget: ${float(itinerary.budget) / itinerary.duration_days:.2f}
+Number of People: {itinerary.number_of_people}
+Duration: {itinerary.duration_days} days
+Interests: {', '.join(itinerary.interests)}
+
+Please provide recommendations in the following JSON format exactly:
+{{
+    "hotels": [
+        {{
+            "name": "string",
+            "price_per_night": "string (in $ format)",
+            "location": "string",
+            "amenities": ["string"],
+            "match_reason": "string"
+        }}
+    ]
+}}
+
+Important:
+- Provide 3 hotel recommendations
+- Ensure prices are realistic and within budget
+- Focus on options that match the user's interests
+- Only return valid JSON format
+"""
+
+        # Generate recommendations
+        response = model.generate_content(prompt)
+
+        if not response.text:
+            raise ValueError("No response received from the AI model")
+
+        try:
+            # Try to parse the response as JSON
+            recommendations = json.loads(response.text)
+
+            # Validate the structure
+            if not isinstance(recommendations, dict):
+                raise ValueError("Response is not a dictionary")
+            if "hotels" not in recommendations:
+                raise ValueError("Missing hotels section in response")
+            if not isinstance(recommendations["hotels"], list):
+                raise ValueError("Hotels are not in list format")
+
+            return JsonResponse(recommendations)
+
+        except json.JSONDecodeError as e:
+            # If JSON parsing fails, try to extract JSON from the response
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response.text)
+            if json_match:
+                try:
+                    recommendations = json.loads(json_match.group(0))
+                    return JsonResponse(recommendations)
+                except json.JSONDecodeError:
+                    raise ValueError(
+                        f"Could not parse JSON from response: {response.text[:200]}"
+                    )
+            else:
+                raise ValueError(
+                    f"Invalid JSON format in response: {response.text[:200]}")
+
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error generating hotel recommendations: {str(e)}\n{error_details}")
+        return JsonResponse(
+            {'error': f'Error generating hotel recommendations: {str(e)}'},
+            status=500)
+
