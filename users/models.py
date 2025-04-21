@@ -90,19 +90,22 @@ class Itinerary(models.Model):
                 
                 if time_match:
                     time = time_match.group(1)
-                    activity = time_match.group(2).strip()
+                    activity_name = time_match.group(2).strip()
                     details = time_match.group(3).strip() if time_match.group(3) else ""
                     
-                # Extract location information if present
+                    # Initialize default values
                     location = None
+                    coordinates = None
+                    cost = ""
+                    description = ""
+                    
+                    # Extract location if present
                     location_match = re.search(r'\[Location:\s*(.*?)\]', details)
                     if location_match:
                         location = location_match.group(1).strip()
-                        # Remove location from details
                         details = re.sub(r'\[Location:.*?\]', '', details).strip()
-
+                    
                     # Extract coordinates if present
-                    coordinates = None
                     coords_match = re.search(r'\[Coordinates:\s*([-\d.]+),\s*([-\d.]+)\]', details)
                     if coords_match:
                         try:
@@ -113,18 +116,63 @@ class Itinerary(models.Model):
                                 'longitude': longitude
                             }
                         except ValueError:
-                            coordinates = None
-                        # Remove coordinates from details
+                            pass
                         details = re.sub(r'\[Coordinates:.*?\]', '', details).strip()
-
-                    # Split details into cost and description
-                    parts = details.split(' - ', 1)
-                    cost = parts[0].strip() if parts else ""
-                    description = parts[1].strip() if len(parts) > 1 else ""
                     
+                    # Try to extract cost from the beginning of details (it should be just a number)
+                    cost_match = re.match(r'^(\d+(?:\.\d+)?)\s*(?:-\s*(.*))?$', details)
+                    if cost_match:
+                        cost = cost_match.group(1)
+                        if cost_match.group(2):
+                            description = cost_match.group(2).strip()
+                    else:
+                        # If we don't find a clear cost at the beginning, check for cost in standard format
+                        parts = details.split(' - ', 1)
+                        first_part = parts[0].strip() if parts else ""
+                        
+                        # Extract number from the first part if it exists
+                        number_match = re.match(r'^(\d+(?:\.\d+)?)(?:.*)?$', first_part)
+                        if number_match:
+                            cost = number_match.group(1)
+                            if len(parts) > 1:
+                                description = parts[1].strip()
+                            else:
+                                # If no clear description part, try to extract description from remaining text
+                                remaining = re.sub(r'^\d+(?:\.\d+)?', '', first_part).strip()
+                                if remaining:
+                                    if remaining.startswith('-'):
+                                        description = remaining[1:].strip()
+                                    else:
+                                        description = remaining
+                        else:
+                            # No numeric cost found
+                            if parts and len(parts) > 1:
+                                description = parts[1].strip()
+                            else:
+                                description = details
+                    
+                    # If we have a numeric-only or very short activity name, try to improve it
+                    if activity_name and (activity_name.isdigit() or len(activity_name.split()) <= 1):
+                        if description and len(description.split()) > 1:
+                            # Use first part of description as activity name if it's better
+                            better_name_match = re.match(r'^([^.,:;]+)(?:[.,:;]\s*)?(.*)$', description)
+                            if better_name_match:
+                                better_name = better_name_match.group(1).strip()
+                                remaining_desc = better_name_match.group(2).strip()
+                                if len(better_name.split()) > 1:
+                                    activity_name = better_name
+                                    description = remaining_desc
+                    
+                    # Clean up cost - ensure it's only a number
+                    if cost:
+                        cost = re.sub(r'[^\d.]', '', cost)
+                        if not re.match(r'^\d+(?:\.\d+)?$', cost):
+                            cost = ""
+                    
+                    # Final activity data
                     current_activities.append({
                         'time': time,
-                        'activity': activity,
+                        'activity': activity_name,
                         'cost': cost,
                         'description': description,
                         'location': location,
@@ -165,31 +213,66 @@ class Activity(models.Model):
         return f"Day {self.day_number} - {self.time} - {self.activity}"
     
     def save(self, *args, **kwargs):
-            # If location is provided but coordinates aren't, try to geocode
-            if self.location and not (self.latitude and self.longitude):
+        # Clean up the activity title if it's too short
+        if len(self.activity.split()) <= 1 and self.description:
+            # Try to extract a better title from the description
+            better_title_match = re.match(r'^([^.,:;]+)(?:[.,:;]\s*)?(.*)$', self.description)
+            if better_title_match:
+                better_title = better_title_match.group(1).strip()
+                if len(better_title.split()) > 1:
+                    self.activity = better_title
+                    self.description = better_title_match.group(2).strip()
+        
+        # Clean cost - ensure it's only numeric
+        if self.cost:
+            # Remove any non-numeric characters (except decimal point)
+            numeric_cost = re.sub(r'[^\d.]', '', self.cost)
+            # Make sure it's a valid numeric value
+            try:
+                float(numeric_cost)
+                self.cost = numeric_cost
+            except ValueError:
+                # If it's not a valid number, set it to empty
+                self.cost = ''
+        
+        # Handle description with cost pattern (e.g., "20 - Donuts and coffee")
+        if self.description:
+            cost_match = re.match(r'^(\d+(?:\.\d+)?)\s*-\s*(.*)$', self.description)
+            if cost_match and (not self.cost or self.cost == ''):
                 try:
-                    from django.conf import settings
-                    import requests
+                    # Extract cost from description and move description text
+                    numeric_cost = cost_match.group(1).strip()
+                    float(numeric_cost)  # Validate it's a number
+                    self.cost = numeric_cost
+                    self.description = cost_match.group(2).strip()
+                except (ValueError, IndexError):
+                    pass
+        
+        # If location is provided but coordinates aren't, try to geocode
+        if self.location and not (self.latitude and self.longitude):
+            try:
+                from django.conf import settings
+                import requests
 
-                    # Use Mapbox Geocoding API to get coordinates
-                    geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{self.location}.json"
-                    params = {
-                        'access_token': settings.MAPBOX_ACCESS_TOKEN,
-                        'types': 'poi,address',
-                        'limit': 1
-                    }
+                # Use Mapbox Geocoding API to get coordinates
+                geocode_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{self.location}.json"
+                params = {
+                    'access_token': settings.MAPBOX_ACCESS_TOKEN,
+                    'types': 'poi,address',
+                    'limit': 1
+                }
 
-                    response = requests.get(geocode_url, params=params)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data['features']:
-                            coordinates = data['features'][0]['center']
-                            self.longitude = coordinates[0]
-                            self.latitude = coordinates[1]
-                except Exception as e:
-                    print(f"Error geocoding location: {e}")
+                response = requests.get(geocode_url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data['features']:
+                        coordinates = data['features'][0]['center']
+                        self.longitude = coordinates[0]
+                        self.latitude = coordinates[1]
+            except Exception as e:
+                print(f"Error geocoding location: {e}")
 
-            super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
 class PackingChecklist(models.Model):
     itinerary = models.OneToOneField(Itinerary, on_delete=models.CASCADE, related_name='packing_checklist')
