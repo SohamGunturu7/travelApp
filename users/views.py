@@ -16,6 +16,7 @@ from django.conf import settings
 import requests
 from django.views.decorators.http import require_POST
 from django.utils.timezone import now
+from datetime import datetime, timedelta
 
 # Configure Gemini API
 # probably don't commit an api key to a github
@@ -938,4 +939,78 @@ def packing_checklist(request, pk):
 
     return render(request, 'users/packing_checklist.html',
                   {'itinerary': itinerary})
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_weather(request, pk):
+    itinerary = get_object_or_404(Itinerary, pk=pk, user=request.user)
+    
+    try:
+        # Configure Gemini API
+        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+        
+        generation_config = {
+            "temperature": 0.7,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 2048,
+        }
+        
+        model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
+                                     generation_config=generation_config)
+        
+        # Create prompt for weather forecast
+        prompt = f"""As a weather expert, generate a 5-day weather forecast for {itinerary.destination} during the trip dates of {itinerary.start_date} to {itinerary.end_date}.
+        
+        Return the response in this exact JSON format:
+        {{
+            "forecast": [
+                {{
+                    "date": "string (e.g., 'Monday, March 25')",
+                    "temperature": "number (in Celsius)",
+                    "condition": "string (e.g., 'Partly cloudy')",
+                    "humidity": "number (percentage)",
+                    "wind_speed": "number (in km/h)",
+                    "icon": "string (choose from: 'fa-sun', 'fa-cloud-sun', 'fa-cloud', 'fa-cloud-showers-heavy', 'fa-cloud-rain', 'fa-snowflake', 'fa-bolt', 'fa-smog')"
+                }}
+            ]
+        }}
+        
+        Important:
+        - Generate realistic weather data based on the destination's typical climate
+        - Include typical temperature ranges for the season
+        - Consider the destination's geographical location
+        - Make the forecast realistic but varied
+        - Choose appropriate weather icons based on the condition
+        - Return only valid JSON format
+        """
+        
+        response = model.generate_content(prompt)
+        
+        if not response.text:
+            raise ValueError("No response received from the AI model")
+        
+        try:
+            # Try to parse the response as JSON
+            weather_data = json.loads(response.text)
+            
+            # Validate the structure
+            if not isinstance(weather_data, dict) or "forecast" not in weather_data:
+                raise ValueError("Invalid response format")
+            
+            return JsonResponse(weather_data)
+            
+        except json.JSONDecodeError:
+            # Try to extract JSON if there's additional text
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response.text)
+            if json_match:
+                weather_data = json.loads(json_match.group(0))
+                return JsonResponse(weather_data)
+            else:
+                raise ValueError("Invalid JSON format in response")
+                
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 

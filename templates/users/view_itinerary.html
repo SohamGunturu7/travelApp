@@ -97,6 +97,40 @@
         </div>
     </div>
 
+    <!-- Weather Forecast Section -->
+    <div class="card border-0 shadow-lg rounded-3 mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="h4 mb-0">
+                    <i class="fas fa-cloud-sun me-2 text-primary"></i>
+                    Weather Forecast
+                </h2>
+                <button class="btn btn-primary" id="loadWeather">
+                    <i class="fas fa-sync me-2"></i>Get Weather
+                </button>
+            </div>
+            
+            <!-- Weather content -->
+            <div id="weatherContent" class="mt-4" style="display: none;">
+                <div class="row g-4">
+                    <div class="col-12">
+                        <div id="weatherList" class="weather-list">
+                            <!-- Weather data will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Loading spinner -->
+            <div id="weatherLoading" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted">Fetching weather data...</p>
+            </div>
+        </div>
+    </div>
+
     <!-- Hidden Gems Section -->
     <div class="card border-0 shadow-lg rounded-3 mb-4">
         <div class="card-body p-4">
@@ -522,6 +556,54 @@
         --bs-gutter-x: 1.5rem;  /* Horizontal spacing between cards */
         --bs-gutter-y: 1.5rem;  /* Vertical spacing between cards */
     }
+
+    /* Weather Card Styles */
+    .weather-card {
+        transition: transform 0.2s ease-in-out;
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    }
+
+    .weather-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    .weather-icon {
+        margin-bottom: 0.5rem;
+    }
+
+    .weather-icon i {
+        transition: transform 0.3s ease;
+    }
+
+    .weather-card:hover .weather-icon i {
+        transform: scale(1.1);
+    }
+
+    .temperature {
+        font-size: 2rem;
+        font-weight: 600;
+        color: #0d6efd;
+    }
+
+    .condition {
+        font-size: 0.9rem;
+        text-transform: capitalize;
+    }
+
+    .weather-details {
+        border-top: 1px solid rgba(0,0,0,0.1);
+        padding-top: 1rem;
+    }
+
+    .weather-details i {
+        font-size: 1.2rem;
+    }
+
+    .weather-details small {
+        font-size: 0.8rem;
+    }
 </style>
 {% endblock %}
 
@@ -908,6 +990,82 @@
             } finally {
                 loadTipsSafetyBtn.disabled = false;
             }
+        });
+
+        // Weather functionality
+        document.getElementById('loadWeather').addEventListener('click', function() {
+            const weatherContent = document.getElementById('weatherContent');
+            const weatherLoading = document.getElementById('weatherLoading');
+            const weatherList = document.getElementById('weatherList');
+            
+            // Show loading spinner
+            weatherContent.style.display = 'none';
+            weatherLoading.style.display = 'block';
+            
+            // Fetch weather data
+            fetch(`/get-weather/${itineraryId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    weatherLoading.style.display = 'none';
+                    weatherContent.style.display = 'block';
+                    
+                    // Format and display weather data
+                    let weatherHTML = '';
+                    if (data.forecast) {
+                        data.forecast.forEach(day => {
+                            weatherHTML += `
+                                <div class="card mb-3 weather-card">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h5 class="card-title mb-0">${day.date}</h5>
+                                                <div class="weather-icon mt-2">
+                                                    <i class="fas ${day.icon} fa-2x text-primary"></i>
+                                                </div>
+                                            </div>
+                                            <div class="text-end">
+                                                <div class="h4 mb-0 temperature">${day.temperature}°C</div>
+                                                <small class="text-muted condition">${day.condition}</small>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3 weather-details">
+                                            <div class="row">
+                                                <div class="col-6">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-tint me-2 text-primary"></i>
+                                                        <div>
+                                                            <small class="text-muted">Humidity</small>
+                                                            <div>${day.humidity}%</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-wind me-2 text-primary"></i>
+                                                        <div>
+                                                            <small class="text-muted">Wind</small>
+                                                            <div>${day.wind_speed} km/h</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        weatherHTML = '<div class="alert alert-info">No weather data available for this location.</div>';
+                    }
+                    
+                    weatherList.innerHTML = weatherHTML;
+                })
+                .catch(error => {
+                    weatherLoading.style.display = 'none';
+                    weatherContent.style.display = 'block';
+                    weatherList.innerHTML = '<div class="alert alert-danger">Error fetching weather data. Please try again later.</div>';
+                    console.error('Error:', error);
+                });
         });
     });
 </script>

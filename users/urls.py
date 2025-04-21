@@ -61,4 +61,7 @@ urlpatterns = [
     path('itinerary/<int:pk>/packing-checklist/',
          views.packing_checklist,
          name='packing_checklist'),
+    path('get-recommendations/<int:pk>/', views.get_recommendations, name='get_recommendations'),
+    path('get-weather/<int:pk>/', views.get_weather, name='get_weather'),
+    path('get-hidden-gems/<int:pk>/', views.get_hidden_gems, name='get_hidden_gems'),
 ]
