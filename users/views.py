@@ -123,9 +123,9 @@ def create_itinerary(request):
                     model_name="models/gemini-1.5-pro",
                     generation_config=generation_config)
 
-                # For longer trips, break into chunks of 5 days each
+                # For longer trips, break into chunks of 3 days each
                 total_days = itinerary.duration_days
-                chunk_size = 5
+                chunk_size = 3
                 num_chunks = (total_days + chunk_size - 1) // chunk_size
                 full_itinerary = []
 
