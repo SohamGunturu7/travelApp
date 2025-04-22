@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+
+{% block title %}Travel Planner - Your Journey Starts Here{% endblock %}
+
+{% block content %}
+<div class="landing-container">
+    <!-- Hero Section -->
+    <div class="hero-section mb-5">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <div class="hero-content-shift">
+                    <h1 class="display-4 fw-bold text-primary mb-3">Your Journey<br class="d-none d-md-block"> <span class="nowrap">Begins Here</span></h1>
+                    <p class="lead mb-4">Plan, organize, and experience your dream trips with our comprehensive travel planning toolkit.</p>
+                    <div class="d-grid gap-3 d-md-flex justify-content-md-start mb-4">
+                        {% if user.is_authenticated %}
+                        <a href="{% url 'itineraries' %}" class="btn btn-primary btn-lg px-4 shadow hover-lift transition">
+                            <i class="fas fa-route me-2"></i>My Itineraries
+                        </a>
+                        <a href="{% url 'create_itinerary' %}" class="btn btn-outline-primary btn-lg px-4 shadow-sm hover-lift transition">
+                            <i class="fas fa-plus me-2"></i>New Journey
+                        </a>
+                        {% else %}
+                        <a href="{% url 'login' %}" class="btn btn-primary btn-lg px-4 shadow hover-lift transition">
+                            <i class="fas fa-sign-in-alt me-2"></i>Sign In
+                        </a>
+                        <a href="{% url 'register' %}" class="btn btn-outline-primary btn-lg px-4 shadow-sm hover-lift transition">
+                            <i class="fas fa-user-plus me-2"></i>Sign Up
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="hero-image-container">
+                    <img src="https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" alt="Travel the World" class="img-fluid rounded-4 shadow-lg">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Features Section -->
+    <div class="features-section mb-5">
+        <div class="row text-center mb-4">
+            <div class="col-12">
+                <h2 class="h2 text-primary fw-bold">Plan Your Perfect Adventure</h2>
+                <p class="lead text-muted">Everything you need to create unforgettable travel experiences</p>
+            </div>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-card h-100">
+                    <div class="feature-icon">
+                        <i class="fas fa-map-marked-alt"></i>
+                    </div>
+                    <h3 class="h4 mt-4 mb-3">Smart Itineraries</h3>
+                    <p>Create detailed day-by-day plans with AI-powered recommendations tailored to your interests and preferences.</p>
+                    <ul class="feature-list">
+                        <li>Custom daily schedules</li>
+                        <li>Budget tracking per activity</li>
+                        <li>Flexible planning options</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card h-100">
+                    <div class="feature-icon">
+                        <i class="fas fa-utensils"></i>
+                    </div>
+                    <h3 class="h4 mt-4 mb-3">Local Recommendations</h3>
+                    <p>Discover the best restaurants, hotels, and hidden gems with personalized recommendations for each destination.</p>
+                    <ul class="feature-list">
+                        <li>Restaurant suggestions</li>
+                        <li>Hotel recommendations</li>
+                        <li>Off-the-beaten-path attractions</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="feature-card h-100">
+                    <div class="feature-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3 class="h4 mt-4 mb-3">Travel Smart</h3>
+                    <p>Stay prepared with essential travel information, safety tips, and practical tools for a worry-free journey.</p>
+                    <ul class="feature-list">
+                        <li>Weather forecasts</li>
+                        <li>Safety information</li>
+                        <li>Packing checklists</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- How It Works -->
+    <div class="how-it-works-section mb-5">
+        <div class="row text-center mb-4">
+            <div class="col-12">
+                <h2 class="h2 text-primary fw-bold">How It Works</h2>
+                <p class="lead text-muted">Create your perfect trip in four simple steps</p>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-3 text-center">
+                <div class="step-icon">
+                    <span>1</span>
+                </div>
+                <h4 class="mt-3">Create Account</h4>
+                <p class="text-muted">Sign up and set up your profile in seconds</p>
+            </div>
+            
+            <div class="col-md-3 text-center">
+                <div class="step-icon">
+                    <span>2</span>
+                </div>
+                <h4 class="mt-3">Plan Trip</h4>
+                <p class="text-muted">Enter your destination, dates, and preferences</p>
+            </div>
+            
+            <div class="col-md-3 text-center">
+                <div class="step-icon">
+                    <span>3</span>
+                </div>
+                <h4 class="mt-3">Customize</h4>
+                <p class="text-muted">Refine your itinerary with personalized activities</p>
+            </div>
+            
+            <div class="col-md-3 text-center">
+                <div class="step-icon">
+                    <span>4</span>
+                </div>
+                <h4 class="mt-3">Enjoy</h4>
+                <p class="text-muted">Follow your plan and create amazing memories</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Call to Action -->
+    <div class="cta-section">
+        <div class="cta-card text-center">
+            <h2 class="h2 text-white mb-4">Ready to Start Your Adventure?</h2>
+            <p class="lead text-white-75 mb-4">Join thousands of travelers creating unforgettable journeys around the world.</p>
+            <div class="d-grid gap-3 d-md-flex justify-content-md-center">
+                {% if user.is_authenticated %}
+                <a href="{% url 'create_itinerary' %}" class="btn btn-light btn-lg px-5 shadow hover-lift transition">
+                    <i class="fas fa-plane-departure me-2"></i>Create Your First Trip
+                </a>
+                {% else %}
+                <a href="{% url 'register' %}" class="btn btn-light btn-lg px-5 shadow hover-lift transition">
+                    <i class="fas fa-user-plus me-2"></i>Sign Up Now
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hover-lift {
+        transition: transform 0.15s ease;
+    }
+    .hover-lift:hover {
+        transform: translateY(-2px);
+    }
+    .transition {
+        transition: all 0.15s ease;
+    }
+    .landing-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .hero-section {
+        padding: 3rem 1.5rem;
+        background-color: rgba(255, 255, 255, 0.9);
+        border-radius: 20px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #1e88e5;
+    }
+    .hero-image-container {
+        position: relative;
+        overflow: hidden;
+    }
+    .hero-image-container img {
+        transition: transform 0.5s ease;
+    }
+    .hero-image-container:hover img {
+        transform: scale(1.02);
+    }
+    .hero-image-container:before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(to bottom right, rgba(30, 136, 229, 0.2), rgba(13, 71, 161, 0.2));
+        border-radius: 16px;
+        z-index: 1;
+    }
+    .feature-card {
+        padding: 2rem;
+        background-color: rgba(255, 255, 255, 0.9);
+        border-radius: 16px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border-top: 3px solid #64b5f6;
+    }
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    .feature-icon {
+        width: 70px;
+        height: 70px;
+        background: linear-gradient(135deg, #1e88e5, #0d47a1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+    .feature-icon i {
+        font-size: 28px;
+        color: white;
+    }
+    .feature-list {
+        list-style: none;
+        padding-left: 0;
+        margin-top: 1rem;
+    }
+    .feature-list li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        position: relative;
+        padding-left: 1.8rem;
+    }
+    .feature-list li:before {
+        content: "\f00c";
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+        position: absolute;
+        left: 0;
+        color: #1e88e5;
+    }
+    .feature-list li:last-child {
+        border-bottom: none;
+    }
+    .features-section, .how-it-works-section {
+        padding: 3rem 1.5rem;
+        background-color: rgba(255, 255, 255, 0.9);
+        border-radius: 20px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    }
+    .features-section {
+        border-left: 4px solid #64b5f6;
+    }
+    .how-it-works-section {
+        border-left: 4px solid #bbdefb;
+    }
+    .step-icon {
+        width: 70px;
+        height: 70px;
+        background: linear-gradient(135deg, #1e88e5, #0d47a1);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+    .step-icon span {
+        font-size: 28px;
+        font-weight: bold;
+    }
+    .cta-section {
+        margin-bottom: 3rem;
+    }
+    .cta-card {
+        padding: 3rem 2rem;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #1e88e5, #0d47a1);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    }
+    .text-white-75 {
+        color: rgba(255, 255, 255, 0.75);
+    }
+    .rounded-4 {
+        border-radius: 1rem;
+    }
+    .nowrap {
+        white-space: nowrap;
+    }
+    .hero-content-shift {
+        margin-left: 1.5cm;
+    }
+</style>
+{% endblock %} 

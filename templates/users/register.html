@@ -5,17 +5,39 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8 col-lg-7">
-        <div class="card border-0 shadow-lg rounded-3">
-            <div class="card-header bg-primary bg-gradient text-white p-3 border-0">
-                <h3 class="card-title h5 mb-0 fw-bold">Create Your Account</h3>
+        <div class="card border-0 shadow-lg rounded-3 travel-card">
+            <div class="card-header p-0 border-0 position-relative">
+                <div class="register-banner">
+                    <img src="https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&auto=format&fit=crop&w=1121&q=80" alt="Travel Adventure" class="img-fluid rounded-top">
+                    <div class="register-banner-overlay d-flex flex-column justify-content-end">
+                        <h3 class="text-white fw-bold mb-0 ps-4 pb-3">Start Your Journey</h3>
+                    </div>
+                </div>
             </div>
             <div class="card-body p-4">
+                <div class="mb-4 text-center">
+                    <div class="travel-icon-container">
+                        <i class="fas fa-passport"></i>
+                    </div>
+                    <p class="text-muted">Create your account and begin exploring</p>
+                </div>
                 <form method="post" class="needs-validation" novalidate>
                     {% csrf_token %}
                     
                     {% for field in form %}
                     <div class="mb-4">
-                        <label for="{{ field.id_for_label }}" class="form-label text-muted fw-semibold">{{ field.label }}</label>
+                        <label for="{{ field.id_for_label }}" class="form-label text-muted fw-semibold">
+                            {% if field.label == 'Username' %}
+                                <i class="fas fa-user me-2 text-primary"></i>
+                            {% elif 'password' in field.name %}
+                                <i class="fas fa-lock me-2 text-primary"></i>
+                            {% elif field.label == 'Email' %}
+                                <i class="fas fa-envelope me-2 text-primary"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle me-2 text-primary"></i>
+                            {% endif %}
+                            {{ field.label }}
+                        </label>
                         {% if field.errors %}
                             <div class="text-danger small mb-2">
                                 {{ field.errors }}
@@ -31,11 +53,13 @@
                     {% endfor %}
                     
                     <div class="d-grid gap-2 mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg fw-semibold shadow-sm hover-lift transition">Create Account</button>
+                        <button type="submit" class="btn btn-primary btn-lg fw-semibold shadow-sm hover-lift transition">
+                            <i class="fas fa-paper-plane me-2"></i>Create Account
+                        </button>
                     </div>
                 </form>
             </div>
-            <div class="card-footer bg-light p-4 text-center border-0">
+            <div class="card-footer bg-light p-3 text-center border-0">
                 <p class="mb-0 text-muted">Already have an account? <a href="{% url 'login' %}" class="text-primary text-decoration-none fw-semibold">Login here</a></p>
             </div>
         </div>
@@ -54,6 +78,43 @@
     .transition {
         transition: all 0.15s ease;
     }
+    .travel-card {
+        overflow: hidden;
+        background-color: rgba(255, 255, 255, 0.95);
+    }
+    .register-banner {
+        position: relative;
+        height: 200px;
+        overflow: hidden;
+    }
+    .register-banner img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .register-banner-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.8));
+    }
+    .travel-icon-container {
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #1e88e5, #0d47a1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 15px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .travel-icon-container i {
+        font-size: 28px;
+        color: white;
+    }
     /* Form field styling */
     input[type="text"],
     input[type="email"],
@@ -68,6 +129,7 @@
         background-color: #f8f9fa;
         border: none;
         border-radius: 0.5rem;
+        border-left: 3px solid #1e88e5 !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         transition: all 0.15s ease-in-out;
     }
@@ -86,6 +148,9 @@
         margin: 0;
         color: #dc3545;
         font-size: 0.875rem;
+    }
+    .card-footer {
+        background-color: transparent !important;
     }
 </style>
 {% endblock %} 

@@ -26,6 +26,22 @@
     .recommendations-list, .weather-list, .gem-grid {
         min-height: 200px;
     }
+
+    .day-navigation-card {
+        background-color: rgba(255, 255, 255, 0.9);
+        border-left: 4px solid #64b5f6;
+    }
+    
+    .day-navigation {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 5px;
+    }
+    
+    .day-nav-btn {
+        font-weight: 500;
+        min-width: 90px;
+    }
 </style>
 {% endblock %}
 
@@ -236,17 +252,19 @@
     </div>
 
     <!-- Day Navigation -->
-    <div class="mb-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="mb-0">Your Day-by-Day Itinerary</h2>
-        </div>
-        
-        <div class="day-navigation d-flex flex-wrap gap-2 mb-3">
-            {% for day in days %}
-                <button class="btn {% if forloop.first %}btn-primary{% else %}btn-outline-primary{% endif %} day-nav-btn" data-day="{{ day.day_number }}">
-                    Day {{ day.day_number }}
-                </button>
-            {% endfor %}
+    <div class="card border-0 shadow-lg rounded-3 mb-4 day-navigation-card">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="mb-0">Your Day-by-Day Itinerary</h2>
+            </div>
+            
+            <div class="day-navigation d-flex flex-wrap gap-2">
+                {% for day in days %}
+                    <button class="btn {% if forloop.first %}btn-primary{% else %}btn-outline-primary{% endif %} day-nav-btn" data-day="{{ day.day_number }}">
+                        Day {{ day.day_number }}
+                    </button>
+                {% endfor %}
+            </div>
         </div>
     </div>
 

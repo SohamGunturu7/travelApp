@@ -4,10 +4,12 @@ from . import views
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [
+    path('', views.landing, name='landing'),  # New landing page as root URL
     path('register/', views.register, name='register'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
-    path('home/', views.home, name='home'),
+    path('home/', views.landing, name='home'),  # Redirect home to landing for compatibility
+    path('itineraries/', views.itineraries, name='itineraries'),  # Renamed from home to itineraries
     path('map/', views.map_view, name='map'),
     path('delete_account/', views.delete_account, name='delete_account'),
     path('profile/update/', views.update_profile, name='update_profile'),

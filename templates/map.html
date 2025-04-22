@@ -7,23 +7,31 @@
     #map {
         height: 500px;
         width: 100%;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        border: 3px solid white;
     }
     .map-error {
-        color: red;
+        color: #e53935;
         padding: 20px;
         text-align: center;
+        background-color: #ffebee;
+        border-radius: 8px;
+        margin-top: 20px;
     }
     .mapboxgl-popup {
         max-width: 300px;
     }
     .mapboxgl-popup-content {
         padding: 15px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-left: 3px solid #1e88e5;
     }
     .mapboxgl-popup-content h6 {
         margin: 0 0 5px 0;
         color: #0d6efd;
+        font-weight: 600;
     }
     .mapboxgl-popup-content p {
         margin: 0;
@@ -35,6 +43,51 @@
     .back-button {
         margin-bottom: 1rem;
     }
+    .map-card {
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+        background-color: transparent;
+    }
+    .map-header {
+        background: linear-gradient(135deg, #1e88e5, #0d47a1);
+        color: white;
+        padding: 20px;
+        border-radius: 12px 12px 0 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .map-header h2 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+    }
+    .map-header h2 i {
+        margin-right: 10px;
+        color: #ffeb3b;
+    }
+    .map-header a {
+        color: white;
+        border-color: white;
+        background-color: transparent;
+        transition: all 0.3s;
+    }
+    .map-header a:hover {
+        background-color: white;
+        color: #1e88e5;
+    }
+    .map-body {
+        padding: 20px;
+    }
+    .map-controls {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .map-type-toggle {
+        margin-left: auto;
+    }
 </style>
 {% endblock %}
 
@@ -42,19 +95,31 @@
 <div class="container py-4">
     <div class="row">
         <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2 class="card-title mb-0">
-                            {% if day_number %}
-                                Day {{ day_number }} Activities in {{ destination.name }}
-                            {% else %}
-                                Interactive Map
-                            {% endif %}
-                        </h2>
-                        <a href="{% url 'view_itinerary' itinerary_id %}" class="btn btn-outline-primary">
-                            <i class="fas fa-arrow-left me-2"></i>Back to Itinerary
-                        </a>
+            <div class="card shadow-sm map-card">
+                <div class="map-header">
+                    <h2 class="card-title">
+                        {% if day_number %}
+                            <i class="fas fa-map-marked-alt"></i> Day {{ day_number }} Activities in {{ destination.name }}
+                        {% else %}
+                            <i class="fas fa-globe-americas"></i> Interactive Map
+                        {% endif %}
+                    </h2>
+                    <a href="{% url 'view_itinerary' itinerary_id %}" class="btn btn-outline-light">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Itinerary
+                    </a>
+                </div>
+                <div class="card-body map-body">
+                    <div class="map-controls">
+                        <div class="travel-icon rounded-circle bg-light p-2 d-flex align-items-center justify-content-center me-2">
+                            <i class="fas fa-compass text-primary"></i>
+                        </div>
+                        <div class="fw-bold">Explore {{ destination.name }}</div>
+                        <div class="map-type-toggle">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary active" id="streets-view">Streets</button>
+                                <button type="button" class="btn btn-outline-primary" id="satellite-view">Satellite</button>
+                            </div>
+                        </div>
                     </div>
                     <div id="map"></div>
                     <div id="map-error" class="map-error" style="display: none;"></div>
@@ -103,6 +168,19 @@
                 showUserHeading: true
             })
         );
+
+        // Map style toggles
+        document.getElementById('streets-view').addEventListener('click', function() {
+            map.setStyle('mapbox://styles/mapbox/streets-v12');
+            this.classList.add('active');
+            document.getElementById('satellite-view').classList.remove('active');
+        });
+        
+        document.getElementById('satellite-view').addEventListener('click', function() {
+            map.setStyle('mapbox://styles/mapbox/satellite-streets-v12');
+            this.classList.add('active');
+            document.getElementById('streets-view').classList.remove('active');
+        });
 
         // Wait for the map to load
         map.on('load', function() {
@@ -203,81 +281,47 @@
                     'line-cap': 'round'
                 },
                 paint: {
-                    'line-color': '#3b82f6',
+                    'line-color': '#1e88e5',
                     'line-width': 4,
-                    'line-opacity': 0.7
+                    'line-opacity': 0.8,
+                    'line-dasharray': [0.5, 1.5]
                 }
             });
 
-            // Add route numbers
-            map.addLayer({
-                id: 'route-numbers',
-                type: 'symbol',
-                source: 'route',
-                layout: {
-                    'symbol-placement': 'line-center',
-                    'text-field': ['get', 'order'],
-                    'text-font': ['Open Sans Bold'],
-                    'text-size': 14,
-                    'text-allow-overlap': true
-                },
-                paint: {
-                    'text-color': '#ffffff',
-                    'text-halo-color': '#3b82f6',
-                    'text-halo-width': 2
-                }
-            });
-
-            // Add popups to markers
+            // Add click event for markers
             map.on('click', 'markers', function(e) {
                 const coordinates = e.features[0].geometry.coordinates.slice();
-                const properties = e.features[0].properties;
+                const title = e.features[0].properties.title;
+                const description = e.features[0].properties.description;
+                const order = e.features[0].properties.order;
                 
-                while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
-                    coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
-                }
+                // Create popup content
+                const popupContent = 
+                    `<h6>${order}. ${title}</h6>
+                    <p>${description}</p>`;
                 
+                // Create popup
                 new mapboxgl.Popup()
                     .setLngLat(coordinates)
-                    .setHTML(`
-                        <h6>${properties.title}</h6>
-                        <p class="mb-0">${properties.description}</p>
-                    `)
+                    .setHTML(popupContent)
                     .addTo(map);
             });
-
+            
             // Change cursor to pointer when hovering over markers
             map.on('mouseenter', 'markers', function() {
                 map.getCanvas().style.cursor = 'pointer';
             });
-
+            
+            // Revert cursor when leaving marker
             map.on('mouseleave', 'markers', function() {
                 map.getCanvas().style.cursor = '';
             });
-
-            // Fit map to show all markers and route
-            if (markers.features.length > 0) {
-                const bounds = new mapboxgl.LngLatBounds();
-                markers.features.forEach(function(feature) {
-                    bounds.extend(feature.geometry.coordinates);
-                });
-                map.fitBounds(bounds, {
-                    padding: 50
-                });
-            }
         });
-
-        // Handle map errors
-        map.on('error', function(e) {
-            console.error('Map error:', e);
-            document.getElementById('map-error').style.display = 'block';
-            document.getElementById('map-error').textContent = 'Error loading map: ' + e.error;
-        });
-
     } catch (error) {
-        console.error('Error initializing map:', error);
+        console.error('Error setting up map:', error);
+        document.getElementById('map').style.display = 'none';
         document.getElementById('map-error').style.display = 'block';
-        document.getElementById('map-error').textContent = 'Error initializing map: ' + error.message;
+        document.getElementById('map-error').textContent = 'Error loading map: ' + error.message;
     }
 </script>
 {% endblock %} 

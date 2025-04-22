@@ -1,26 +1,243 @@
 {% extends "base.html" %}
 
-{% block title %}
-Update Profile - Travel Planner
-{% endblock %}
+{% block title %}Update Profile - Travel Planner{% endblock %}
 
 {% block content %}
-<div class="container my-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow p-4">
-                <h2 class="mb-4">Update Profile</h2>
-                <form method="POST" novalidate>
-                    {% csrf_token %}
-                    {{ form.as_p }}
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
-                </form>
-                <hr class="my-4">
-                <div>
-                    <a href="{% url 'delete_account' %}" class="btn btn-outline-danger">Delete Account</a>
+<div class="profile-container">
+    <div class="profile-header mb-4">
+        <div class="profile-banner">
+            <img src="https://images.unsplash.com/photo-1506197603052-3cc9c3a201bd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" alt="Profile Banner" class="img-fluid rounded-top">
+            <div class="profile-banner-overlay d-flex flex-column justify-content-end">
+                <h2 class="text-white fw-bold mb-0 ps-4 pb-3">Edit Your Profile</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="profile-content mb-4">
+        <div class="row g-0">
+            <div class="col-md-4 mb-0 d-flex">
+                <div class="profile-sidebar w-100">
+                    <div class="text-center mb-4">
+                        <div class="profile-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <h4 class="mt-3">{{ user.username }}</h4>
+                        <p class="text-muted">{{ user.email }}</p>
+                    </div>
+                    <div class="profile-menu">
+                        <div class="profile-menu-item active">
+                            <i class="fas fa-user-edit me-2"></i> Edit Profile
+                        </div>
+                        <div class="profile-menu-item">
+                            <i class="fas fa-key me-2"></i> <a href="{% url 'password_reset' %}" class="text-decoration-none text-reset">Change Password</a>
+                        </div>
+                        <div class="profile-menu-item">
+                            <i class="fas fa-route me-2"></i> <a href="{% url 'itineraries' %}" class="text-decoration-none text-reset">My Itineraries</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8 d-flex">
+                <div class="profile-form-container w-100">
+                    <h3 class="mb-4 border-bottom pb-3">Personal Information</h3>
+                    
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
+                        
+                        {% for field in form %}
+                        <div class="form-group mb-4">
+                            <label for="{{ field.id_for_label }}" class="form-label fw-semibold">
+                                {% if field.name == 'username' %}
+                                    <i class="fas fa-user me-2 text-primary"></i>
+                                {% elif field.name == 'email' %}
+                                    <i class="fas fa-envelope me-2 text-primary"></i>
+                                {% elif field.name == 'first_name' %}
+                                    <i class="fas fa-id-card me-2 text-primary"></i>
+                                {% elif field.name == 'last_name' %}
+                                    <i class="fas fa-id-card me-2 text-primary"></i>
+                                {% else %}
+                                    <i class="fas fa-info-circle me-2 text-primary"></i>
+                                {% endif %}
+                                {{ field.label }}
+                            </label>
+                            
+                            <div class="input-field">
+                                {{ field }}
+                            </div>
+                            
+                            {% if field.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ field.errors }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if field.help_text %}
+                            <small class="form-text text-muted mt-1">
+                                {{ field.help_text }}
+                            </small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        
+                        <div class="d-grid gap-2 mt-4 mb-3">
+                            <button type="submit" class="btn btn-primary fw-semibold shadow-sm hover-lift transition">
+                                <i class="fas fa-save me-2"></i>Save Changes
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
+    
+    <div class="danger-zone-container">
+        <div class="danger-zone">
+            <h4 class="text-danger mb-3"><i class="fas fa-exclamation-triangle me-2"></i>Danger Zone</h4>
+            <p class="text-muted mb-3">Permanently delete your account and all of your data. This action cannot be undone.</p>
+            <a href="{% url 'delete_account' %}" class="btn btn-outline-danger">
+                <i class="fas fa-trash-alt me-2"></i>Delete Account
+            </a>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hover-lift {
+        transition: transform 0.15s ease;
+    }
+    .hover-lift:hover {
+        transform: translateY(-2px);
+    }
+    .transition {
+        transition: all 0.15s ease;
+    }
+    .profile-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    .profile-banner {
+        position: relative;
+        height: 180px;
+        overflow: hidden;
+        border-radius: 12px 12px 0 0;
+        margin-bottom: 25px;
+    }
+    .profile-banner img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .profile-banner-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.8));
+    }
+    .profile-avatar {
+        width: 100px;
+        height: 100px;
+        background: linear-gradient(135deg, #1e88e5, #0d47a1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        border: 4px solid white;
+    }
+    .profile-avatar i {
+        font-size: 36px;
+        color: white;
+    }
+    .profile-content {
+        margin-bottom: 15px;
+    }
+    .profile-content .row {
+        margin: 0 -10px;
+        display: flex;
+        flex-wrap: wrap;
+    }
+    .profile-content .col-md-4,
+    .profile-content .col-md-8 {
+        padding: 0 10px;
+    }
+    .profile-sidebar, 
+    .profile-form-container, 
+    .danger-zone {
+        background-color: rgba(255, 255, 255, 0.95);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        width: 100%;
+    }
+    .profile-sidebar {
+        border-top: 4px solid #1e88e5;
+    }
+    .profile-form-container {
+        border-top: 4px solid #1e88e5;
+    }
+    .profile-menu {
+        margin-top: 1.5rem;
+    }
+    .profile-menu-item {
+        padding: 0.8rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        transition: all 0.15s ease;
+        cursor: pointer;
+    }
+    .profile-menu-item:hover {
+        background-color: rgba(30, 136, 229, 0.1);
+    }
+    .profile-menu-item.active {
+        background-color: rgba(30, 136, 229, 0.15);
+        font-weight: 600;
+        color: #1e88e5;
+    }
+    .input-field {
+        position: relative;
+    }
+    .input-field input, .input-field select, .input-field textarea {
+        display: block;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        font-weight: 400;
+        line-height: 1.5;
+        color: #212529;
+        background-color: #f8f9fa;
+        border: none;
+        border-radius: 0.5rem;
+        border-left: 3px solid #1e88e5 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: all 0.15s ease-in-out;
+    }
+    .input-field input:focus, .input-field select:focus, .input-field textarea:focus {
+        background-color: #fff;
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+        outline: none;
+    }
+    .danger-zone-container {
+        margin-top: 15px;
+        margin-bottom: 3rem;
+    }
+    .danger-zone {
+        background-color: rgba(255, 255, 255, 0.95);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        border-top: 4px solid #dc3545;
+    }
+    /* Fix profile menu items to be fully clickable */
+    .profile-menu-item a {
+        display: block;
+        margin: -0.8rem -1rem;
+        padding: 0.8rem 1rem;
+    }
+</style>
 {% endblock %}

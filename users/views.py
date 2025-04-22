@@ -54,7 +54,7 @@ def login_view(request):
 
         if user is not None:
             login(request, user)
-            return redirect('home')
+            return redirect('landing')
         else:
             messages.error(request, 'Invalid username or password.')
 
@@ -68,10 +68,11 @@ def logout_view(request):
 
 
 @login_required
-def home(request):
+def itineraries(request):
+    """View to display all user itineraries"""
     itineraries = Itinerary.objects.filter(
         user=request.user).order_by('-created_at')
-    return render(request, 'users/home.html', {'itineraries': itineraries})
+    return render(request, 'users/itineraries.html', {'itineraries': itineraries})
 
 
 @login_required
@@ -1201,4 +1202,9 @@ Important:
         return JsonResponse(
             {'error': f'Error generating hotel recommendations: {str(e)}'},
             status=500)
+
+
+def landing(request):
+    """Landing page / home page of the application"""
+    return render(request, 'users/landing.html')
 
