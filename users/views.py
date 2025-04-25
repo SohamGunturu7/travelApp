@@ -17,10 +17,13 @@ import requests
 from django.views.decorators.http import require_POST
 from django.utils.timezone import now
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 # Configure Gemini API
 # probably don't commit an api key to a github
-genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+genai.configure(api_key=os.getenv('GEMINI_KEY'))
 
 
 def list_available_models():
