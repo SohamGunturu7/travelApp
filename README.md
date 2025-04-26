@@ -1,6 +1,7 @@
 # App Instructions
 
-## 1) Fork this Repo into your local IDE (VSCode, PyCharm, etc.)
+## 1) 
+Fork this Repo into your local IDE (VSCode, PyCharm, etc.)
 
 ## 2) Create a .env file at the main directory level
 
