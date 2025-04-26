@@ -1,4 +1,4 @@
-# App Instructions
+# Travel App Description + Instructions
 
 Weclome to our AI-Powered Travel Assistant, an intelligent trip-planning application designed to create personalized travel itineraries based on user preferences, budget, and real-time data. Whether planning a solo adventure, a family vacation, or a business trip, this AI-driven tool streamlines the process by generating optimized travel schedules, recommending must-visit attractions, and providing real-time updates on flights, weather, and local events.
 
