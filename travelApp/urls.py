@@ -17,6 +17,7 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include
+from django.http import HttpResponse
 from django.views.generic import RedirectView
 
 urlpatterns = [
@@ -27,4 +28,5 @@ urlpatterns = [
     path("users/logout/", RedirectView.as_view(url="/logout/", permanent=True)),
     path("users/home/", RedirectView.as_view(url="/home/", permanent=True)),
     path("", RedirectView.as_view(url="/login/", permanent=True), name="index"),
+    path('favicon.ico', lambda request: HttpResponse(status=204)),
 ]

@@ -42,6 +42,54 @@
         font-weight: 500;
         min-width: 90px;
     }
+
+    /* Override Bootstrap default that prevents interaction */
+    #activityModal .modal-dialog {
+        pointer-events: auto !important;
+    }
+
+    /* Fixed modal styling */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1055;
+        width: 100%;
+        height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        outline: 0;
+    }
+    
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1050;
+        width: 100vw;
+        height: 100vh;
+        background-color: #000;
+    }
+    
+    .modal-dialog {
+        position: relative;
+        z-index: 1060;
+        /* Keep Bootstrap's default pointer-events here if needed, or remove if the override above handles it */
+    }
+    
+    /* Force modal content way above the backdrop */
+    #activityModal .modal-content {
+        position: relative; /* Needed for z-index */
+        z-index: 99999 !important; /* Extremely high z-index */
+        pointer-events: auto; /* Already set, but reinforcing */
+        border: none;
+        box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    }
+
+    /* Hide the modal backdrop */
+    .modal-backdrop {
+       display: none !important;
+    }
 </style>
 {% endblock %}
 
@@ -337,12 +385,12 @@
 </div>
 
 <!-- Activity Modal -->
-<div class="modal fade" id="activityModal" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade" id="activityModal" tabindex="-1" aria-labelledby="modalTitle" aria-hidden="true" data-bs-backdrop="false">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-light">
                 <h5 class="modal-title" id="modalTitle">Add Activity</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="activityForm" class="needs-validation" novalidate>
@@ -703,24 +751,43 @@
             });
         });
 
-        const modal = new bootstrap.Modal(document.getElementById('activityModal'));
+        // Ensure Bootstrap is loaded
+        if (typeof bootstrap === 'undefined' || typeof bootstrap.Modal === 'undefined') {
+            console.error('Bootstrap or Bootstrap Modal is not loaded!');
+            alert('Error: Required library not loaded. Please refresh.');
+            return;
+        }
+
+        // Get modal element and instance
+        const modalElement = document.getElementById('activityModal');
+        if (!modalElement) {
+            console.error('Modal element #activityModal not found!');
+            return;
+        }
+        
+        // Initialize Bootstrap modal once
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+
         const form = document.getElementById('activityForm');
         const itineraryId = document.getElementById('itinerary-data').dataset.itineraryId;
         
-        // Add Activity
+        // Add Activity button click handler
         document.querySelectorAll('.add-activity').forEach(button => {
-            button.addEventListener('click', function() {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
                 const dayNumber = parseInt(this.dataset.day);
                 document.getElementById('dayNumber').value = dayNumber;
                 document.getElementById('activityId').value = '';
+                document.getElementById('modalTitle').textContent = 'Add Activity';
                 form.reset();
-                modal.show();
+                modalInstance.show();
             });
         });
         
-        // Edit Activity
+        // Edit Activity button click handler
         document.querySelectorAll('.edit-activity').forEach(button => {
-            button.addEventListener('click', function() {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
                 const activityId = this.dataset.activityId;
                 const activityCard = this.closest('.timeline-item');
                 const dayCard = this.closest('.day-card');
@@ -728,20 +795,31 @@
                 
                 document.getElementById('activityId').value = activityId;
                 document.getElementById('dayNumber').value = dayNumber;
-                document.getElementById('activityTime').value = activityCard.querySelector('h4').textContent.trim();
-                document.getElementById('activityName').value = activityCard.querySelector('h5').textContent.trim();
-                document.getElementById('activityDescription').value = activityCard.querySelector('p')?.textContent.trim() || '';
+                document.getElementById('modalTitle').textContent = 'Edit Activity';
                 
-                // Fix the cost extraction to remove dollar signs
-                let cost = activityCard.querySelector('.badge')?.textContent.trim() || '';
+                // Populate form fields
+                document.getElementById('activityTime').value = activityCard.querySelector('h4')?.textContent.trim() || '';
+                document.getElementById('activityName').value = activityCard.querySelector('h5')?.textContent.trim() || '';
+                const description = activityCard.querySelector('p');
+                document.getElementById('activityDescription').value = description ? description.textContent.trim() : '';
+                const costBadge = activityCard.querySelector('.badge');
+                let cost = costBadge ? costBadge.textContent.trim() : '';
                 cost = cost.replace(/\$/g, '').trim();
                 document.getElementById('activityCost').value = cost;
                 
-                modal.show();
+                modalInstance.show();
             });
         });
-        
-        // Save Activity
+
+        // Focus on the first input field when the modal is shown
+        modalElement.addEventListener('shown.bs.modal', function () {
+            const firstInput = modalElement.querySelector('input[type="time"], input[type="text"]');
+            if (firstInput) {
+                firstInput.focus();
+            }
+        });
+
+        // Save Activity button click handler
         document.getElementById('saveActivity').addEventListener('click', async function() {
             const activityId = document.getElementById('activityId').value;
             const dayNumber = parseInt(document.getElementById('dayNumber').value);
@@ -751,9 +829,11 @@
             const activity = document.getElementById('activityName').value;
             
             if (!time || !activity) {
-                alert('Please fill in all required fields');
+                form.classList.add('was-validated'); // Show validation feedback
+                alert('Please fill in all required fields (Time and Activity Name).');
                 return;
             }
+            form.classList.remove('was-validated'); // Reset validation state
             
             const data = {
                 day_number: dayNumber,
@@ -778,19 +858,19 @@
                 });
                 
                 if (response.ok) {
-                    const result = await response.json();
-                    location.reload();  // Reload the page to show updated activities
+                    modalInstance.hide();
+                    location.reload();
                 } else {
-                    const error = await response.json();
-                    alert(error.error || 'Error saving activity');
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error saving activity' }));
+                    alert(errorData.error || 'Error saving activity');
                 }
             } catch (error) {
-                console.error('Error:', error);
-                alert('Error saving activity');
+                console.error('Fetch Error:', error);
+                alert('A network error occurred while saving the activity.');
             }
         });
         
-        // Delete Activity
+        // Delete Activity button click handler
         document.querySelectorAll('.delete-activity').forEach(button => {
             button.addEventListener('click', async function() {
                 if (confirm('Are you sure you want to delete this activity?')) {
@@ -804,13 +884,13 @@
                         });
                         
                         if (response.ok) {
-                            location.reload();  // Reload the page to show updated activities
+                            location.reload();
                         } else {
                             alert('Error deleting activity');
                         }
                     } catch (error) {
-                        console.error('Error:', error);
-                        alert('Error deleting activity');
+                        console.error('Delete Error:', error);
+                        alert('A network error occurred while deleting the activity.');
                     }
                 }
             });
@@ -1023,7 +1103,7 @@
             }
         });
 
-        // Tips & Safety functionality (similar to Recommendations and Hidden Gems)
+        // Tips & Safety functionality
         const loadTipsSafetyBtn = document.getElementById('loadTipsSafety');
         const tipsSafetyContent = document.getElementById('tipsSafetyContent');
         const tipsSafetyLoading = document.getElementById('tipsSafetyLoading');
@@ -1169,4 +1249,6 @@
     });
 </script>
 {% endblock %}
+
+
 
