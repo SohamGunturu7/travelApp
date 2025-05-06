@@ -545,7 +545,7 @@ def get_recommendations(request, pk):
         }
 
         # Configure Gemini API
-        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+        genai.configure(api_key=os.getenv('GEMINI_KEY'))
 
         model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
                                       generation_config=generation_config)
@@ -775,7 +775,7 @@ def get_hidden_gems(request, pk):
 
     try:
         # Configure Gemini API
-        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+        genai.configure(api_key=os.getenv('GEMINI_KEY'))
 
         generation_config = {
             "temperature": 0.9,
@@ -855,7 +855,7 @@ def packing_checklist(request, pk):
     if request.method == 'POST' and 'regenerate' in request.POST:
         try:
             # Configure Gemini API
-            genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+            genai.configure(api_key=os.getenv('GEMINI_KEY'))
 
             generation_config = {
                 "temperature": 0.9,
@@ -952,7 +952,7 @@ def get_weather(request, pk):
     
     try:
         # Configure Gemini API
-        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+        genai.configure(api_key=os.getenv('GEMINI_KEY'))
         
         generation_config = {
             "temperature": 0.7,
@@ -1033,7 +1033,7 @@ def get_restaurant_recommendations(request, pk):
         }
 
         # Configure Gemini API
-        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+        genai.configure(api_key=os.getenv('GEMINI_KEY'))
 
         model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
                                       generation_config=generation_config)
@@ -1127,7 +1127,7 @@ def get_hotel_recommendations(request, pk):
         }
 
         # Configure Gemini API
-        genai.configure(api_key='AIzaSyDCJW588azq9bd0cTEH9uoYroc7MWoC8h4')
+        genai.configure(api_key=os.getenv('GEMINI_KEY'))
 
         model = genai.GenerativeModel(model_name="models/gemini-1.5-pro",
                                       generation_config=generation_config)
